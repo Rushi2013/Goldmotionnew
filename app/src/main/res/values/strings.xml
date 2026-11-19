@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">JARVIS AI</string>
+    <string name="notif_channel_escalation">Auto-reply escalations</string>
+    <string name="notif_channel_escalation_desc">Messages that need your approval before replying</string>
+    <string name="notif_channel_engine">Auto-reply engine</string>
+    <string name="notif_channel_engine_desc">Keeps the auto-reply engine running</string>
+</resources>

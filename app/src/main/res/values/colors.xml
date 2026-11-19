@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="amoled_black">#FF000000</color>
+    <color name="jarvis_surface">#FF0B0F14</color>
+    <color name="jarvis_cyan">#FF00E5FF</color>
+    <color name="ic_launcher_background">#FF04070B</color>
+</resources>

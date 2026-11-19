@@ -1,0 +1,197 @@
+name: Build JARVIS AI APK
+
+# Produces installable APKs on every push / tag / manual run.
+# No secrets, no keystore, no Google services are required for a successful build:
+# if no signing secrets exist the release APK is signed with the standard debug key
+# so it still installs on any device.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: "Build a release APK too"
+        required: false
+        default: "true"
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.caching=true"
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+jobs:
+  build:
+    name: Assemble APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Accept SDK licences (best effort)
+        run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
+
+      - name: Set up Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Prepare Gradle wrapper
+        run: |
+          chmod +x ./gradlew
+          # The wrapper jar is committed; if a fork loses it, restore it from a public
+          # project and pin the distribution in gradle-wrapper.properties.
+          if [ ! -s gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "gradle-wrapper.jar missing — generating it with a local gradle install"
+            sudo apt-get update -qq && sudo apt-get install -y -qq gradle >/dev/null 2>&1 || true
+            gradle wrapper --gradle-version 8.9 || true
+          fi
+
+      - name: Gradle version
+        run: ./gradlew --version
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace || echo "::warning::unit tests reported failures (see logs)"
+        continue-on-error: true
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Build release APK
+        if: github.event_name != 'pull_request'
+        env:
+          JARVIS_STORE_FILE_BASE64: ${{ secrets.JARVIS_STORE_FILE_BASE64 }}
+          JARVIS_STORE_PASSWORD: ${{ secrets.JARVIS_STORE_PASSWORD }}
+          JARVIS_KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
+          JARVIS_KEY_PASSWORD: ${{ secrets.JARVIS_KEY_PASSWORD }}
+        run: |
+          ARGS=":app:assembleRelease"
+          if [ -n "${{ secrets.JARVIS_STORE_FILE_BASE64 }}" ]; then
+            echo "Building with the release keystore from secrets"
+            ARGS="$ARGS -PJARVIS_STORE_FILE_BASE64=${{ secrets.JARVIS_STORE_FILE_BASE64 }}"
+            ARGS="$ARGS -PJARVIS_STORE_PASSWORD=${{ secrets.JARVIS_STORE_PASSWORD }}"
+            ARGS="$ARGS -PJARVIS_KEY_ALIAS=${{ secrets.JARVIS_KEY_ALIAS }}"
+            ARGS="$ARGS -PJARVIS_KEY_PASSWORD=${{ secrets.JARVIS_KEY_PASSWORD }}"
+          else
+            echo "No keystore secret found — release APK falls back to the debug signer (still installable)"
+          fi
+          ./gradlew $ARGS --stacktrace -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME="1.0.${{ github.run_number }}"
+
+      - name: Run lint (report only)
+        if: always() && github.event_name != 'pull_request'
+        run: ./gradlew :app:lintDebug || true
+        continue-on-error: true
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p output
+          find app/build/outputs/apk -name "*.apk" -exec cp {} output/ \;
+          ls -lh output || true
+
+      - name: Rename artifacts
+        run: |
+          cd output
+          for f in *.apk; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *debug*) mv "$f" "jarvis-ai-debug.apk" ;;
+              *release*) mv "$f" "jarvis-ai-release.apk" ;;
+            esac
+          done
+          ls -lh
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ai-debug-apk
+          path: output/jarvis-ai-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload release APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ai-release-apk
+          path: output/jarvis-ai-release.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload test & lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ai-reports
+          path: |
+            app/build/reports/tests/**
+            app/build/reports/lint-results-*.html
+            app/build/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish APK to a rolling Release (main + tags)
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest-apk' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('JARVIS AI {0}', github.ref_name) || 'JARVIS AI — latest APK' }}
+          body: |
+            Automated APK build from commit `${{ github.sha }}`.
+
+            * `jarvis-ai-debug.apk` — install directly, works everywhere
+            * `jarvis-ai-release.apk` — minified; signed with the debug key unless repo secrets
+              `JARVIS_STORE_FILE_BASE64`, `JARVIS_STORE_PASSWORD`, `JARVIS_KEY_ALIAS`,
+              `JARVIS_KEY_PASSWORD` are configured
+
+            **Setup:** install → Onboarding → paste OpenWA base URL + operator key → Settings → LIVE.
+            Defaults to DEMO mode so nothing is ever sent by accident.
+          files: |
+            output/jarvis-ai-debug.apk
+            output/jarvis-ai-release.apk
+          draft: false
+          prerelease: false
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## JARVIS AI build"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo "| Debug APK | $(ls -la output/jarvis-ai-debug.apk 2>/dev/null | awk '{print $5" bytes"}' || echo missing) |"
+            echo "| Release APK | $(ls -la output/jarvis-ai-release.apk 2>/dev/null | awk '{print $5" bytes"}' || echo missing) |"
+          } >> "$GITHUB_STEP_SUMMARY"

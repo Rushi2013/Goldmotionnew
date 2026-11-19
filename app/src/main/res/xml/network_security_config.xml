@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Self-hosted OpenWA is usually reached over plain HTTP on a LAN address
+  (http://192.168.x.x:2785/api) or an emulator loopback (http://10.0.2.2:2785/api).
+  Android would otherwise refuse those URLs, so cleartext stays permitted.
+  Production guidance: put OpenWA behind HTTPS (Cloudflare Tunnel / reverse proxy)
+  and use docs/SECURITY.md topology T2. The app warns in Settings for http:// LIVE mode.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
