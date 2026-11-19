@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
 import kotlinx.serialization.serializer
 
+@Serializable
 data class BulkContent(
     val type: String = "TEXT",             // TEXT | IMAGE | VIDEO | AUDIO | DOCUMENT | STICKER | LOCATION | CONTACT | POLL | TEMPLATE
     val text: String = "",
@@ -49,6 +51,7 @@ data class BulkContent(
     val templateVars: Map<String, String> = emptyMap(),
 )
 
+@Serializable
 data class BulkOptions(
     val delayMs: Int = 4000,
     val randomize: Boolean = true,
@@ -128,13 +131,7 @@ class BulkExecutor(
                     batchId = batchId,
                     chatId = it.chatId,
                     name = it.name,
-                    varJson = if (it.vars.isEmpty()) null else json.encodeToString(
-                        kotlinx.serialization.builtins.MapSerializer(
-                            kotlinx.serialization.serializer<String>(),
-                            kotlinx.serialization.serializer<String>(),
-                        ),
-                        it.vars,
-                    ),
+                    varJson = if (it.vars.isEmpty()) null else json.encodeToString(it.vars),
                 )
             }
         )
@@ -374,12 +371,7 @@ class BulkExecutor(
         val name = r.name ?: ""
         val vars = runCatching {
             r.varJson?.let {
-                json.decodeFromString(
-                    kotlinx.serialization.builtins.MapSerializer(
-                        kotlinx.serialization.serializer<String>(),
-                        kotlinx.serialization.serializer<String>(),
-                    ), it,
-                )
+                json.decodeFromString<Map<String, String>>(it)
             } ?: emptyMap()
         }.getOrDefault(emptyMap())
 

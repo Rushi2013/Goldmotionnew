@@ -100,6 +100,22 @@ fun HomeScreen(
         if (settings.ttsEnabled) voice.speak(text)
     }
 
+    suspend fun resolveContact(name: String): Candidate? {
+        val candidates = if (settings.mode == AppMode.LIVE && settings.sessionId.isNotBlank()) {
+            when (val res = container.api.listContacts(settings.sessionId, limit = 500)) {
+                is ApiResult.Success -> res.data.map {
+                    Candidate("${it.number}@c.us", it.displayName, it.number, "openwa")
+                }
+                is ApiResult.Failure -> emptyList()
+            }
+        } else {
+            container.demo.contacts().map { Candidate("${it.number}@c.us", it.displayName, it.number, "demo") }
+        }
+        val resolver = ai.jarvis.data.contacts.RecipientResolver()
+        val result = resolver.resolve(name, candidates)
+        return result.autoSelected ?: result.best
+    }
+
     /**
      * Executes an intent. Anything that sends to a real person requires an explicit confirm:
      * HIGH risk intents become a PendingAction and the user must tap "Confirm & send".
@@ -255,22 +271,6 @@ fun HomeScreen(
             IntentName.UNKNOWN -> say(intent.clarifiedQuestion ?: "Samajh nahi aaya. Jaise: \"Pramila ko hi bhej\" ya \"auto reply on\".", Tone.WARN)
             else -> say("Ye command abhi Home se directly support nahi — ${intent.intent.name}.", Tone.NEUTRAL)
         }
-    }
-
-    suspend fun resolveContact(name: String): Candidate? {
-        val candidates = if (settings.mode == AppMode.LIVE && settings.sessionId.isNotBlank()) {
-            when (val res = container.api.listContacts(settings.sessionId, limit = 500)) {
-                is ApiResult.Success -> res.data.map {
-                    Candidate("${it.number}@c.us", it.displayName, it.number, "openwa")
-                }
-                is ApiResult.Failure -> emptyList()
-            }
-        } else {
-            container.demo.contacts().map { Candidate("${it.number}@c.us", it.displayName, it.number, "demo") }
-        }
-        val resolver = ai.jarvis.data.contacts.RecipientResolver()
-        val result = resolver.resolve(name, candidates)
-        return result.autoSelected ?: result.best
     }
 
     fun submit(text: String) {
@@ -490,7 +490,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun QuickAction(badge: String, label: String, onClick: () -> Unit) {
+private fun androidx.compose.foundation.layout.RowScope.QuickAction(badge: String, label: String, onClick: () -> Unit) {
     val colors = LocalJarvisColors.current
     JarvisCard(Modifier.weight(1f), onClick = onClick) {
         Column(

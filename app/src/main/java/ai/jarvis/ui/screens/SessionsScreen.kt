@@ -254,7 +254,7 @@ fun SessionsScreen(container: AppContainer, nav: NavHostController) {
                                     message = "Session '${res.data.name}' bana: ${res.data.id}"
                                     load()
                                 }
-                                is ApiResult.Failure -> message = "❌ ${res.data.let { res.error.oneLine }}"
+                                is ApiResult.Failure -> message = "❌ ${res.error.headline}: ${res.error.oneLine}"
                             }
                         }
                     }, enabled = settings.mode == AppMode.LIVE) { Text("Create session") }

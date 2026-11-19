@@ -386,7 +386,9 @@ class AutoReplyEngine(
             inboundMessageId = event.messageId,
             inboundText = if (classification.category == ReplyCategory.OTP_SECURITY) "[OTP content hidden]" else event.text,
             category = classification.category.name,
-            suggestedJson = json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.serializer<String>()), suggestions.distinct()),
+            suggestedJson = suggestions.distinct().joinToString(
+                prefix = "[", postfix = "]", separator = ",",
+            ) { kotlinx.serialization.json.JsonPrimitive(it).toString() },
             reason = reason,
         )
         val id = db.escalationDao().insert(entity)
