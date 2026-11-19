@@ -90,6 +90,11 @@ class RecipientResolver {
         val jw = jaroWinkler(q, name)
         if (jw >= 0.92) return 0.70 + (jw - 0.92) * 1.75   // 0.70 → 0.84
 
+        // Token-level typo match: "pramlaa" vs "Pramila Sapkal" scores 0.90 on the full string but
+        // 0.943 against the first token, so compare against each token as well.
+        val bestToken = nTokens.maxOfOrNull { jaroWinkler(q, it) } ?: 0.0
+        if (bestToken >= 0.92) return 0.70 + (bestToken - 0.92) * 1.75
+
         val translit = transliterate(q)
         if (translit != q && (jaroWinkler(translit, name) >= 0.92 || name.contains(translit))) return 0.80
 

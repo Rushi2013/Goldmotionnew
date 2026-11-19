@@ -318,19 +318,20 @@ class IntentParser(private val gateway: AiGateway? = null) {
         ))
         if (!hasSendVerb) return null
 
-        // "Pramila ko hi bhej" | "send hi to Pramila" | "Pramila ko WhatsApp par hello bhej"
+        // Each pattern declares its own capture order — never infer it from the pattern text
+        // (pattern 2 also contains the word "likh", which previously swapped message and name).
+        //  order = (messageGroup, nameGroup)
         val patterns = listOf(
-            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\s]{2,30}?)(?:\s+on\s+whats\s*app|\s+whats\s*app(?:\s*(?:par|pe))?)?\s*[?.!]*\s*$"""),
-            Regex("""(?i)(?:(?:whats\s*app)\s*(?:par|pe|se|me)?\s*)?([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)"""),
-            Regex("""(?i)["']?(.+?)["']?\s+likh\s*(?:ke|kar)?\s*([\p{L}\s]{2,30}?)\s*ko\s*bhej"""),
+            // "send hi to Pramila on WhatsApp"
+            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\s]{2,30}?)(?:\s+on\s+whats\s*app|\s+whats\s*app(?:\s*(?:par|pe))?)?\s*[?.!]*\s*$""") to (1 to 2),
+            // "Pramila ko WhatsApp par hello bhej"
+            Regex("""(?i)(?:(?:whats\s*app)\s*(?:par|pe|se|me)?\s*)?([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)""") to (2 to 1),
+            // "hello likh ke Pramila ko bhej"
+            Regex("""(?i)["']?(.+?)["']?\s+likh\s*(?:ke|kar)?\s*([\p{L}\s]{2,30}?)\s*ko\s*bhej""") to (1 to 2),
         )
-        for (p in patterns) {
+        for ((p, groups) in patterns) {
             val m = p.find(original) ?: continue
-            var (msg, name) = when {
-                p.pattern.startsWith("(?i)(?:send") -> m.groupValues[1].trim() to m.groupValues[2].trim()
-                p.pattern.contains("likh") -> m.groupValues[1].trim() to m.groupValues[2].trim()
-                else -> m.groupValues[2].trim() to m.groupValues[1].trim()
-            }
+            var (msg, name) = m.groupValues[groups.first].trim() to m.groupValues[groups.second].trim()
             msg = msg.trim().trim('"', '\'', ',', '.')
             name = cleanName(stripChannelWords(name))
             if (name.isBlank()) continue
