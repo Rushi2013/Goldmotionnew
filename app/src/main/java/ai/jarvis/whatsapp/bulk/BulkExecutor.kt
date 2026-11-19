@@ -20,13 +20,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
-import kotlinx.serialization.serializer
 
 @Serializable
 data class BulkContent(
@@ -131,7 +131,13 @@ class BulkExecutor(
                     batchId = batchId,
                     chatId = it.chatId,
                     name = it.name,
-                    varJson = if (it.vars.isEmpty()) null else json.encodeToString(it.vars),
+                    varJson = if (it.vars.isEmpty()) null else json.encodeToString(
+                        kotlinx.serialization.builtins.MapSerializer(
+                            String.serializer(),
+                            String.serializer(),
+                        ),
+                        it.vars,
+                    ),
                 )
             }
         )
@@ -371,7 +377,13 @@ class BulkExecutor(
         val name = r.name ?: ""
         val vars = runCatching {
             r.varJson?.let {
-                json.decodeFromString<Map<String, String>>(it)
+                json.decodeFromString(
+                    kotlinx.serialization.builtins.MapSerializer(
+                        String.serializer(),
+                        String.serializer(),
+                    ),
+                    it,
+                )
             } ?: emptyMap()
         }.getOrDefault(emptyMap())
 

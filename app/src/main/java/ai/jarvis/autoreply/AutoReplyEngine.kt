@@ -31,7 +31,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.serializer
 
 /** An inbound message normalised from Socket.IO / webhook / history polling. */
 data class InboundEvent(
