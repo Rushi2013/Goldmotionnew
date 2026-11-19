@@ -39,6 +39,7 @@ jobs:
           key: ci-gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/libs.versions.toml') }}
 
       - name: Run unit tests
+        shell: bash
         run: |
           chmod +x ./gradlew
           set +e
@@ -47,30 +48,13 @@ jobs:
           echo "exit=$CODE"
           {
             echo "### Unit tests exit=$CODE"
-            echo '#### Compiler / test errors'
+            echo '#### Errors'
             echo '```'
-            grep -E "^e: |FAILED|AssertionError|expected|Exception|error:" test.log | head -80
+            grep -E '^e: |FAILED|AssertionError|expected|Exception|error:' test.log | head -80
             echo '```'
-            echo '#### Failing test names (from JUnit XML)'
+            echo '#### JUnit results'
             echo '```'
-            for f in app/build/test-results/testDebugUnitTest/TEST-*.xml; do
-              [ -f "$f" ] || continue
-              grep -oE '<testcase name="[^"]*" classname="[^"]*"' "$f" | sed 's/<testcase name="/  /; s/" classname="/  @ /; s/"$//' > /tmp/all_tests.txt || true
-              python3 -c "
-import sys, xml.etree.ElementTree as ET
-r = ET.parse('$f').getroot()
-print('file: $f  tests=%s failures=%s errors=%s' % (r.get('tests'), r.get('failures'), r.get('errors')))
-for tc in r.iter('testcase'):
-    for tag in ('failure', 'error'):
-        n = tc.find(tag)
-        if n is not None:
-            print('  FAIL', tc.get('classname'), '::', tc.get('name'))
-            msg = (n.get('message') or '').strip()
-            if msg: print('       msg:', msg[:400])
-            body = (n.text or '').strip()
-            if body: print('       at :', body.split(chr(10))[0][:300])
-" 2>/dev/null || sed -n '1,40p' "$f"
-            done
+            python3 .github/scripts/junit_summary.py app/build/test-results/testDebugUnitTest || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$CODE"
