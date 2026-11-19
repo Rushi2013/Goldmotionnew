@@ -3,6 +3,8 @@ package ai.jarvis.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -194,7 +196,7 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
         )
         Spacer(Modifier.height(8.dp))
         androidx.compose.foundation.layout.Row(
-            Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())
+            Modifier.horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
