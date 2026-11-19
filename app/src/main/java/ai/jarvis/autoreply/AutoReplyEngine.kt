@@ -286,7 +286,7 @@ class AutoReplyEngine(
         }
 
         // 10. LOG
-        when (result) {
+        return when (result) {
             is ApiResult.Success -> {
                 loopBreaker.recordAutoReply(event.chatId)
                 rateLimiter.record(event.chatId)
@@ -385,7 +385,7 @@ class AutoReplyEngine(
             inboundMessageId = event.messageId,
             inboundText = if (classification.category == ReplyCategory.OTP_SECURITY) "[OTP content hidden]" else event.text,
             category = classification.category.name,
-            suggestedJson = json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer<String>()), suggestions.distinct()),
+            suggestedJson = json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer()), suggestions.distinct()),
             reason = reason,
         )
         val id = db.escalationDao().insert(entity)

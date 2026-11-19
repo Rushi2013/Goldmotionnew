@@ -144,7 +144,7 @@ class OpenAiCompatibleProvider(private val config: LlmConfig) : LlmProvider {
         chat(system, user, maxTokens, temperature)
 
     private fun String.toRequestBody(): okhttp3.RequestBody =
-        okhttp3.RequestBody.create(this, "application/json; charset=utf-8".toMediaType())
+        "application/json; charset=utf-8".toMediaType().let { mt -> okhttp3.RequestBody.create(mt, this) }
 }
 
 /** Google Gemini generateContent with JSON mime type. */
@@ -222,7 +222,7 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
         generate(system, user, maxTokens, temperature)
 
     private fun String.toRequestBody(): okhttp3.RequestBody =
-        okhttp3.RequestBody.create(this, "application/json; charset=utf-8".toMediaType())
+        "application/json; charset=utf-8".toMediaType().let { mt -> okhttp3.RequestBody.create(mt, this) }
 }
 
 /** Chooses the best available provider and remembers the last health result. */

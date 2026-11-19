@@ -66,8 +66,8 @@ class HttpCore(
         val base = baseUrl().trimEnd('/')
         val p = if (path.startsWith("/")) path else "/$path"
         val qs = query.entries
-            .filter { it.value != null && it.value.isNotBlank() }
-            .joinToString("&") { "${enc(it.key)}=${enc(it.value!!)}" }
+            .mapNotNull { e -> e.value?.takeIf { it.isNotBlank() }?.let { v -> "${enc(e.key)}=${enc(v)}" } }
+            .joinToString("&")
         return if (qs.isEmpty()) base + p else base + p + "?" + qs
     }
 
