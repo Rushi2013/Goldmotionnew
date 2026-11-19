@@ -88,7 +88,7 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
 
     fun load() {
         scope.launch {
-            loading = true
+            loading = messages.isEmpty()
             error = null
             if (settings.mode == AppMode.DEMO) {
                 messages = container.demo.messages(chatId)
@@ -117,11 +117,13 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     }
 
     LaunchedEffect(chatId) {
-        load()
-        // Resolve the saved contact / group subject — the raw JID must never be the title.
-        if (settings.mode != AppMode.DEMO) {
-            scope.launch {
-                container.chats.refresh()
+        // Title resolution and message fetch run concurrently: two round-trips in parallel
+        // instead of one after the other.
+        val titleJob = scope.launch {
+            if (settings.mode != AppMode.DEMO) {
+                // Use whatever the catalogue already has *first* — usually instant.
+                container.chats.nameFor(chatId)?.let { chatTitle = it }
+                container.chats.refreshChats()
                 val chat = container.chats.chat(chatId)
                 if (chat?.isGroup == true || chatId.endsWith("@g.us")) {
                     val info = container.api.groupInfo(settings.sessionId, chatId)
@@ -134,6 +136,8 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 }
             }
         }
+        load()
+        titleJob.join()
     }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)

@@ -134,8 +134,9 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
         val matchesTab = when (tab) {
             "Unread" -> c.unreadCount > 0
             "Groups" -> c.isGroup
+            "Contacts" -> !c.isGroup
             "Archived" -> c.archived
-            else -> true
+            else -> !c.archived          // "All" hides archived chats, like WhatsApp
         }
         matchesQuery && matchesTab
     }
@@ -192,14 +193,20 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
             singleLine = true,
         )
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "Unread", "Groups", "Archived").forEach { t ->
-                val sel = tab == t
+        androidx.compose.foundation.layout.Row(
+            Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val unreadTotal = chats.count { it.unreadCount > 0 }
+            listOf("All", if (unreadTotal > 0) "Unread ($unreadTotal)" else "Unread", "Groups", "Contacts", "Archived").forEach { t ->
+                val key = t.substringBefore(" (")
+                val sel = tab == key
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(50))
                         .background(if (sel) colors.cyan.copy(alpha = 0.16f) else colors.surfaceElevated)
-                        .clickable { tab = t }
+                        .clickable { tab = key }
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(t, style = MaterialTheme.typography.labelMedium, color = if (sel) colors.cyan else colors.muted)
