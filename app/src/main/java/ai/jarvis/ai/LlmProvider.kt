@@ -1,5 +1,6 @@
 package ai.jarvis.ai
 
+import okhttp3.MediaType.Companion.toMediaType
 import ai.jarvis.core.ApiResult
 import ai.jarvis.data.LlmConfig
 import ai.jarvis.data.api.HttpCore
@@ -143,7 +144,7 @@ class OpenAiCompatibleProvider(private val config: LlmConfig) : LlmProvider {
         chat(system, user, maxTokens, temperature)
 
     private fun String.toRequestBody(): okhttp3.RequestBody =
-        okhttp3.RequestBody.create("application/json; charset=utf-8".let { okhttp3.MediaType.parse(it) }, this)
+        okhttp3.RequestBody.create(this, "application/json; charset=utf-8".toMediaType())
 }
 
 /** Google Gemini generateContent with JSON mime type. */
@@ -221,7 +222,7 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
         generate(system, user, maxTokens, temperature)
 
     private fun String.toRequestBody(): okhttp3.RequestBody =
-        okhttp3.RequestBody.create("application/json; charset=utf-8".let { okhttp3.MediaType.parse(it) }, this)
+        okhttp3.RequestBody.create(this, "application/json; charset=utf-8".toMediaType())
 }
 
 /** Chooses the best available provider and remembers the last health result. */

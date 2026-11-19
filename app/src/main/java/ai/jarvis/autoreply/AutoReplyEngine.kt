@@ -454,6 +454,11 @@ class AutoReplyEngine(
         data class Ignored(val reason: String) : HandleResult()
         data class Blocked(val reason: String) : HandleResult()
 
+        companion object {
+            /** Lower-case factory used throughout the pipeline. */
+            fun ignored(reason: String): HandleResult = Ignored(reason)
+        }
+
         val summary: String
             get() = when (this) {
                 is AutoSent -> "AUTO_SEND → \"$draft\" (${classification.category.name}, ${(classification.confidence * 100).toInt()}%) messageId=$messageId"
