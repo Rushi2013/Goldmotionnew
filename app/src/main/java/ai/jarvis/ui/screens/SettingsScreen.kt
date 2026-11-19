@@ -73,9 +73,16 @@ fun SettingsScreen(container: AppContainer, nav: NavHostController) {
     var testing by remember { mutableStateOf(false) }
 
     fun persist() {
+        // Sanitise the gateway URL: scheme, trailing slash, duplicated /api, whitespace.
+        val normalized = ai.jarvis.core.HostResolver.normalize(baseUrl, isEmulator = isEmulatorDevice())
+        if (normalized.error != null) {
+            testResult = "❌ ${normalized.error}"
+            return
+        }
+        baseUrl = normalized.url
         container.settings.update {
             it.copy(
-                baseUrl = baseUrl.trim().trimEnd('/'),
+                baseUrl = normalized.url,
                 apiKey = apiKey.trim(),
                 sessionId = sessionId.trim(),
                 defaultCountryCode = countryCode.filter { ch -> ch.isDigit() }.ifBlank { "91" },
@@ -83,7 +90,10 @@ fun SettingsScreen(container: AppContainer, nav: NavHostController) {
                 llm = LlmConfig(provider = llmProvider, baseUrl = llmBase.trim(), model = llmModel.trim(), apiKey = llmKey, temperature = 0.3),
             )
         }
-        testResult = "Saved. Ab 'Test connection' chalao."
+        testResult = buildString {
+            append("Saved. Ab 'Test connection' chalao.")
+            normalized.warning?.let { append("\n⚠️ ").append(it) }
+        }
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -115,6 +125,14 @@ fun SettingsScreen(container: AppContainer, nav: NavHostController) {
                             TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show", color = colors.cyan) }
                         },
                     )
+                    ai.jarvis.core.HostResolver.normalize(baseUrl, isEmulator = isEmulatorDevice()).warning?.let { hint ->
+                        Text(
+                            "⚠️ $hint",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.warn,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = sessionId, onValueChange = { sessionId = it },
@@ -298,3 +316,10 @@ private fun ToggleLine(label: String, checked: Boolean, onChange: (Boolean) -> U
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }
+
+/** `10.0.2.2` only routes to the host inside the emulator — warn the user on a real phone. */
+private fun isEmulatorDevice(): Boolean =
+    android.os.Build.FINGERPRINT.startsWith("generic") ||
+        android.os.Build.FINGERPRINT.contains("emulator", true) ||
+        android.os.Build.MODEL.contains("Emulator", true) ||
+        android.os.Build.PRODUCT.contains("sdk", true)

@@ -48,6 +48,10 @@ data class AppSettings(
     val themeAmoled: Boolean = true,
     val lastBulkTemplate: String = "",
     val realtimeEnabled: Boolean = true,
+    /** Keep raw WhatsApp media on disk (off by default: the user asked for no device storage). */
+    val cacheMediaOnDevice: Boolean = false,
+    /** How many messages to pull per chat when a thread is opened. */
+    val historyPageSize: Int = 150,
 )
 
 /**

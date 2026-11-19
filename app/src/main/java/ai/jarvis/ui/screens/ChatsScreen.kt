@@ -81,8 +81,11 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
                 loading = false
                 return@launch
             }
-            when (val res = container.api.sessionChats(sessionId, limit = 300)) {
-                is ApiResult.Success -> chats = res.data
+            if (sessionId.isBlank()) { loading = false; return@launch }
+            // ChatDirectory merges /chats with /contacts so a saved number shows its name
+            // instead of the raw JID, and holds the result in RAM only.
+            when (val res = container.chats.refresh(force = true)) {
+                is ApiResult.Success -> chats = container.chats.enrichedChats()
                 is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
             }
             loading = false
@@ -121,6 +124,13 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
             )
             IconButton(onClick = { nav.navigate(Routes.SEARCH) }) {
                 Icon(Icons.Filled.Search, contentDescription = "Search", tint = colors.cyan)
+            }
+            IconButton(onClick = { nav.navigate(Routes.STATUS_HUB) }) {
+                Icon(
+                    androidx.compose.material.icons.Icons.Filled.RemoveRedEye,
+                    contentDescription = "Status",
+                    tint = colors.cyan,
+                )
             }
         }
 

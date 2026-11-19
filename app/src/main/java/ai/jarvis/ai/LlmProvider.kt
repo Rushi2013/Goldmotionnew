@@ -95,8 +95,9 @@ class OpenAiCompatibleProvider(private val config: LlmConfig) : LlmProvider {
             client.newCall(req).execute().use { resp ->
                 val text = resp.body?.string().orEmpty()
                 val latency = System.currentTimeMillis() - started
-                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}", config.model)
-                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}", config.model)
+                val warn = baseUrlWarning()?.let { " · $it" }.orEmpty()
+                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}$warn", config.model)
+                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}$warn", config.model)
             }
         } catch (e: Exception) {
             ProviderHealth(false, id, System.currentTimeMillis() - started, e.message ?: "network error", config.model)
@@ -154,11 +155,31 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
     private val client = okhttp3.OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).callTimeout(40, TimeUnit.SECONDS).build()
 
+    /**
+     * Gemini endpoints are `{base}/models/{model}:generateContent`.
+     *
+     * The Base URL field is shared with the OpenAI-compatible provider, so a user who switches
+     * the provider chip to "gemini" still has `https://api.openai.com/v1` sitting in the field.
+     * Posting a Gemini request there returns `HTTP 403 PERMISSION_DENIED`. We therefore ignore
+     * any non-Google base URL and fall back to the public Gemini host instead of failing.
+     */
     private fun url(): String {
-        val model = config.model.ifBlank { "gemini-1.5-flash" }
-        val base = config.baseUrl.takeIf { it.startsWith("http") && it.contains("generativelanguage") }
-            ?: "https://generativelanguage.googleapis.com/v1beta"
-        return "${base.trimEnd('/')}/models/$model:generateContent?key=${config.apiKey}"
+        val model = config.model.trim().ifBlank { "gemini-1.5-flash" }
+        val raw = config.baseUrl.trim().trimEnd('/')
+        val base = when {
+            raw.contains("generativelanguage.googleapis.com") -> raw
+            // OpenAI-shaped or empty base URL under the Gemini provider → use the real host.
+            else -> "https://generativelanguage.googleapis.com/v1beta"
+        }.let { if (it.endsWith("/v1") || it.endsWith("/v1beta")) it else "$it/v1beta" }
+        val safeModel = model.removePrefix("models/")
+        return "$base/models/$safeModel:generateContent?key=${config.apiKey.trim()}"
+    }
+
+    /** Human-readable hint shown next to the Test LLM result. */
+    private fun baseUrlWarning(): String? {
+        val raw = config.baseUrl.trim()
+        if (raw.isBlank() || raw.contains("generativelanguage.googleapis.com")) return null
+        return "Base URL '$raw' Gemini endpoint nahi hai — ${url().substringBefore('?')} use kiya ja raha hai."
     }
 
     override suspend fun healthCheck(): ProviderHealth = withContext(Dispatchers.IO) {
@@ -176,8 +197,9 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
             ).execute().use { resp ->
                 val text = resp.body?.string().orEmpty()
                 val latency = System.currentTimeMillis() - started
-                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}", config.model)
-                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}", config.model)
+                val warn = baseUrlWarning()?.let { " · $it" }.orEmpty()
+                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}$warn", config.model)
+                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}$warn", config.model)
             }
         } catch (e: Exception) {
             ProviderHealth(false, id, System.currentTimeMillis() - started, e.message ?: "network error", config.model)

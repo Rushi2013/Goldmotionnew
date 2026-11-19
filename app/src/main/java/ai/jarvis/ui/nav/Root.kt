@@ -70,6 +70,7 @@ object Routes {
     const val THREAD = "thread/{chatId}"
     const val MEDIA_SEND = "media"
     const val STATUS = "status"
+    const val STATUS_HUB = "statushub"
     const val GROUPS = "groups"
     const val CHANNELS = "channels"
     const val CHANNEL_DETAIL = "channel/{channelId}"
@@ -194,6 +195,7 @@ private fun OrbScaffold(
                 }
                 composable(Routes.MEDIA_SEND) { MediaSendScreen(container, nav) }
                 composable(Routes.STATUS) { StatusScreen(container, nav) }
+                composable(Routes.STATUS_HUB) { StatusHubScreen(container, nav) }
                 composable(Routes.GROUPS) { GroupsScreen(container, nav) }
                 composable(Routes.CHANNELS) { ChannelsScreen(container, nav) }
                 composable(Routes.CHANNEL_DETAIL) { entry ->

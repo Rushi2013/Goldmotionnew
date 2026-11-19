@@ -232,18 +232,98 @@ data class AutomationRuleDto(
     val updatedAt: String? = null,
 )
 
+/**
+ * One status/story row. OpenWA versions differ in how much interaction data they expose, so
+ * every stat is nullable/absent-tolerant: a gateway that reports nothing must not look like
+ * "0 views", it must look like "no data".
+ */
 @Serializable
 data class StatusDto(
     val id: String,
     val contact: JsonElement? = null,
+    val contactId: String? = null,
+    val contactName: String? = null,
+    val contactNumber: String? = null,
+    val isMine: Boolean? = null,
+    val mine: Boolean? = null,
     val type: String = "text",
     val caption: String? = null,
+    val text: String? = null,
     val mediaUrl: String? = null,
+    val mediaMimetype: String? = null,
+    val mediaBase64: String? = null,
     val backgroundColor: String? = null,
     val font: Int? = null,
     val timestamp: String? = null,
+    val timestampMs: Long? = null,
     val expiresAt: String? = null,
-)
+    val views: Int? = null,
+    val viewCount: Int? = null,
+    val viewers: List<StatusViewerDto> = emptyList(),
+    val likes: Int? = null,
+    val likeCount: Int? = null,
+    val likedBy: List<StatusViewerDto> = emptyList(),
+    val likedByMe: Boolean? = null,
+    val playedByMe: Boolean? = null,
+) {
+    /** Name to show in the status rail. Never the raw JID if a better label exists. */
+    val displayContact: String
+        get() {
+            contactName?.takeIf { it.isNotBlank() }?.let { return it }
+            val el = contact
+            if (el is kotlinx.serialization.json.JsonObject) {
+                for (key in listOf("name", "pushName", "notify", "verifiedName", "formattedName", "number")) {
+                    val v = (el[key] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    if (!v.isNullOrBlank()) return v
+                }
+            }
+            contactNumber?.takeIf { it.isNotBlank() }?.let { return it }
+            contactId?.substringBefore('@')?.takeIf { it.isNotBlank() }?.let { return it }
+            return "Unknown"
+        }
+
+    val bodyText: String? get() = caption?.takeIf { it.isNotBlank() } ?: text?.takeIf { it.isNotBlank() }
+
+    val isOwn: Boolean get() = mine == true || isMine == true
+
+    val resolvedViews: Int? get() = views ?: viewCount
+    val resolvedLikes: Int? get() = likes ?: likeCount
+
+    val epochMs: Long?
+        get() {
+            timestampMs?.let { return it }
+            val raw = timestamp ?: return null
+            raw.toLongOrNull()?.let { return if (it < 10_000_000_000L) it * 1000 else it }
+            return runCatching {
+                java.time.Instant.parse(raw).toEpochMilli()
+            }.getOrNull()
+        }
+
+    val kind: StatusKind
+        get() = when (type.lowercase()) {
+            "image", "photo" -> StatusKind.IMAGE
+            "video" -> StatusKind.VIDEO
+            "audio", "voice", "ptt" -> StatusKind.VOICE
+            else -> StatusKind.TEXT
+        }
+}
+
+enum class StatusKind { TEXT, IMAGE, VIDEO, VOICE }
+
+/** A single viewer / liker of a status. */
+@Serializable
+data class StatusViewerDto(
+    val id: String = "",
+    val name: String? = null,
+    val number: String? = null,
+    val timestamp: String? = null,
+    val reactedAt: String? = null,
+) {
+    val label: String
+        get() = name?.takeIf { it.isNotBlank() }
+            ?: number?.takeIf { it.isNotBlank() }
+            ?: id.substringBefore('@').ifBlank { "Unknown" }
+}
 
 @Serializable
 data class StatusListDto(val statuses: List<StatusDto> = emptyList())

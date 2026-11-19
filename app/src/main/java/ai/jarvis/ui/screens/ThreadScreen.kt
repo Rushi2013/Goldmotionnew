@@ -77,6 +77,8 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     var lastOutcome by remember { mutableStateOf<String?>(null) }
     var showAttach by remember { mutableStateOf(false) }
     var menuFor by remember { mutableStateOf<MessageDto?>(null) }
+    var chatTitle by remember { mutableStateOf(ai.jarvis.data.contacts.ChatDirectory.displayFallback(chatId)) }
+    var chatSubtitle by remember { mutableStateOf(if (chatId.endsWith("@g.us")) "Group chat" else "Individual chat") }
     val listState = rememberLazyListState()
 
     fun load() {
@@ -88,15 +90,45 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 loading = false
                 return@launch
             }
-            when (val res = container.api.messages(settings.sessionId, chatId = chatId, limit = 150, orderBy = "asc")) {
-                is ApiResult.Success -> messages = res.data.messages
-                is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
+            val page = settings.historyPageSize.coerceIn(20, 500)
+            when (val res = container.api.messages(settings.sessionId, chatId = chatId, limit = page, orderBy = "asc")) {
+                is ApiResult.Success -> {
+                    messages = res.data.messages.sortedBy { it.timestampMs }
+                }
+                is ApiResult.Failure -> {
+                    // Some engines do not index /messages with a chatId filter; /history is the
+                    // WhatsApp-native store and always has the older messages the user expects.
+                    when (val hist = container.api.chatHistory(settings.sessionId, chatId, limit = page)) {
+                        is ApiResult.Success -> {
+                            messages = decodeHistory(hist.data)
+                        }
+                        is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
+                    }
+                }
             }
             loading = false
         }
     }
 
-    LaunchedEffect(chatId) { load() }
+    LaunchedEffect(chatId) {
+        load()
+        // Resolve the saved contact / group subject — the raw JID must never be the title.
+        if (settings.mode != AppMode.DEMO) {
+            scope.launch {
+                container.chats.refresh()
+                val chat = container.chats.chat(chatId)
+                if (chat?.isGroup == true || chatId.endsWith("@g.us")) {
+                    val info = container.api.groupInfo(settings.sessionId, chatId)
+                    if (info is ApiResult.Success && info.data.name.isNotBlank()) chatTitle = info.data.name
+                    else container.chats.nameFor(chatId)?.let { chatTitle = it }
+                    chatSubtitle = "Group chat"
+                } else {
+                    container.chats.nameFor(chatId)?.let { chatTitle = it }
+                    chatSubtitle = if (container.chats.contactFor(chatId)?.isMyContact == true) "Saved contact" else "Individual chat"
+                }
+            }
+        }
+    }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
@@ -170,11 +202,12 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 if (nav.previousBackStackEntry != null) nav.popBackStack() else nav.navigate(Routes.CHATS)
             }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.text) }
             Column(Modifier.weight(1f)) {
-                Text(chatId.substringBefore('@'), style = MaterialTheme.typography.titleMedium, color = colors.text, maxLines = 1)
                 Text(
-                    if (chatId.endsWith("@g.us")) "Group chat" else "Individual chat",
-                    style = MaterialTheme.typography.labelSmall, color = colors.muted,
+                    chatTitle,
+                    style = MaterialTheme.typography.titleMedium, color = colors.text,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
+                Text(chatSubtitle, style = MaterialTheme.typography.labelSmall, color = colors.muted)
             }
             StatusChip(
                 if (settings.mode == AppMode.DEMO) "DEMO" else "LIVE",
@@ -198,7 +231,21 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 messages.isEmpty() -> EmptyState("Koi message nahi", "Pehla message bhejo.")
                 else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     items(messages, key = { it.id }) { msg ->
-                        MessageBubble(msg, onClick = { menuFor = msg })
+                        MessageBubble(
+                            msg = msg,
+                            onClick = { menuFor = msg },
+                            apiKey = settings.apiKey.takeIf { it.isNotBlank() },
+                            onMediaTap = { m ->
+                                scope.launch {
+                                    lastOutcome = "Media fetch ho raha hai…"
+                                    val res = container.api.messageMediaBytes(settings.sessionId, chatId, m.apiMessageId)
+                                    lastOutcome = when (res) {
+                                        is ApiResult.Success -> "✅ Media ready (${res.data.size / 1024} KB, memory me — device par save nahi hua)"
+                                        is ApiResult.Failure -> "❌ Media: ${res.error.oneLine}"
+                                    }
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -246,8 +293,36 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     }
 }
 
+/**
+ * `/messages/{chatId}/history` returns a bare JSON array whose element shape differs between
+ * engine versions, so it is decoded defensively into the same [MessageDto] the UI already knows.
+ */
+private fun decodeHistory(arr: kotlinx.serialization.json.JsonArray): List<MessageDto> {
+    val json = kotlinx.serialization.json.Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+        explicitNulls = false
+    }
+    return arr.mapNotNull { el ->
+        runCatching { json.decodeFromJsonElement(MessageDto.serializer(), el) }.getOrNull()
+    }.map { dto ->
+        // history rows sometimes omit direction/chatId — fill in what the bubble needs.
+        dto.copy(
+            direction = dto.direction.ifBlank {
+                if (dto.from.endsWith("@c.us") && dto.id.startsWith("true_")) "outgoing" else "incoming"
+            },
+        )
+    }.sortedBy { it.timestampMs }
+}
+
 @Composable
-fun MessageBubble(msg: MessageDto, onClick: (() -> Unit)? = null) {
+fun MessageBubble(
+    msg: MessageDto,
+    onClick: (() -> Unit)? = null,
+    apiKey: String? = null,
+    onMediaTap: ((MessageDto) -> Unit)? = null,
+) {
     val colors = LocalJarvisColors.current
     val outgoing = msg.isOutgoing
     Row(
@@ -268,7 +343,11 @@ fun MessageBubble(msg: MessageDto, onClick: (() -> Unit)? = null) {
             } else if (!outgoing && msg.author != null) {
                 Text(msg.author, style = MaterialTheme.typography.labelSmall, color = colors.blue)
             }
-            MediaBadge(msg)
+            ai.jarvis.ui.components.MediaPreview(
+                msg = msg,
+                authHeader = apiKey,
+                onOpen = { onMediaTap?.invoke(msg) },
+            )
             val body = msg.body.orEmpty()
             if (body.isNotBlank()) {
                 Text(body, style = MaterialTheme.typography.bodyMedium, color = colors.text)
@@ -291,32 +370,6 @@ fun MessageBubble(msg: MessageDto, onClick: (() -> Unit)? = null) {
             }
         }
     }
-}
-
-@Composable
-private fun MediaBadge(msg: MessageDto) {
-    val colors = LocalJarvisColors.current
-    val label = when (msg.type) {
-        "image" -> "🖼 Image"
-        "video" -> "🎬 Video"
-        "audio", "voice" -> "🎙 Audio"
-        "document" -> "📄 ${msg.mediaPath?.substringAfterLast('/') ?: "Document"}"
-        "sticker" -> " sticker"
-        "location" -> "📍 Location"
-        "contact" -> "👤 Contact"
-        "poll" -> "📊 Poll"
-        "revoked" -> "🚫 Deleted"
-        else -> null
-    } ?: return
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.cyan.copy(alpha = 0.10f))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = colors.cyan, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-    Spacer(Modifier.height(6.dp))
 }
 
 @Composable

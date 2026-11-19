@@ -540,6 +540,16 @@ class OpenWaApi(private val http: HttpCore) {
     suspend fun messageMedia(sessionId: String, chatId: String, messageId: String): ApiResult<ApiOutcome> =
         http.execute("GET", "/sessions/$sessionId/messages/${encode(chatId)}/${encode(messageId)}/media")
 
+    /**
+     * Download the real bytes of a media message. Held in memory only — never written to disk,
+     * which keeps the promise that WhatsApp media does not pile up on the device.
+     */
+    suspend fun messageMediaBytes(sessionId: String, chatId: String, messageId: String): ApiResult<ByteArray> =
+        http.binary("GET", "/sessions/$sessionId/messages/${encode(chatId)}/${encode(messageId)}/media")
+
+    /** Absolute URL of a media path reported by the gateway (for Coil / previews). */
+    fun mediaUrl(mediaPath: String): String = http.absoluteUrl(mediaPath)
+
     suspend fun messageReactions(sessionId: String, chatId: String, messageId: String): ApiResult<JsonElement> =
         http.call("GET", "/sessions/$sessionId/messages/${encode(chatId)}/${encode(messageId)}/reactions")
 
@@ -611,6 +621,23 @@ class OpenWaApi(private val http: HttpCore) {
     suspend fun deleteStatus(sessionId: String, id: String): ApiResult<ApiOutcome> =
         http.execute("DELETE", "/sessions/$sessionId/status/${encode(id)}")
 
+    /** Like / react to somebody else's status. */
+    suspend fun likeStatus(sessionId: String, statusId: String, emoji: String = "❤️"): ApiResult<ApiOutcome> =
+        http.execute("POST", "/sessions/$sessionId/status/${encode(statusId)}/like",
+            body = buildJsonObject { put("emoji", emoji) }.toString())
+
+    /** Mark a status as seen/played (this is what makes the blue ring go away). */
+    suspend fun viewStatus(sessionId: String, statusId: String): ApiResult<ApiOutcome> =
+        http.execute("POST", "/sessions/$sessionId/status/${encode(statusId)}/view")
+
+    /** Who viewed one of MY statuses. 501 when the engine does not expose receipts. */
+    suspend fun statusViewers(sessionId: String, statusId: String): ApiResult<JsonElement> =
+        http.call("GET", "/sessions/$sessionId/status/${encode(statusId)}/viewers")
+
+    /** Who liked one of MY statuses. */
+    suspend fun statusLikes(sessionId: String, statusId: String): ApiResult<JsonElement> =
+        http.call("GET", "/sessions/$sessionId/status/${encode(statusId)}/likes")
+
     // =================================================================================
     // CHANNELS / NEWSLETTERS (10)
     // =================================================================================
@@ -622,6 +649,23 @@ class OpenWaApi(private val http: HttpCore) {
             put("name", name)
             description?.let { put("description", it) }
         }.toString())
+
+    /**
+     * Public-channel discovery. Some engines expose it as `/channels/search`, others as the
+     * generic `/search?type=channels`; we try the dedicated route first and fall back.
+     */
+    suspend fun searchChannels(sessionId: String, query: String, limit: Int = 30): ApiResult<JsonElement> {
+        val primary = http.call<JsonElement>(
+            "GET", "/sessions/$sessionId/channels/search",
+            query = mapOf("q" to query, "limit" to "$limit"),
+        )
+        if (primary is ApiResult.Success) return primary
+        val secondary = http.call<JsonElement>(
+            "GET", "/search",
+            query = mapOf("q" to query, "type" to "channels", "sessionId" to sessionId, "limit" to "$limit"),
+        )
+        return if (secondary is ApiResult.Success) secondary else primary
+    }
 
     suspend fun subscribeChannel(sessionId: String, inviteCode: String): ApiResult<JsonElement> =
         http.call("POST", "/sessions/$sessionId/channels/subscribe", body = buildJsonObject { put("inviteCode", inviteCode) }.toString())

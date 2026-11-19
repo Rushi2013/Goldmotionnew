@@ -122,6 +122,36 @@ class HttpCore(
     }
 
     /**
+     * Binary GET (images / video / audio / documents).
+     *
+     * IMPORTANT: the bytes are returned **in memory** and never written to the filesystem.
+     * The user asked that WhatsApp media must not accumulate on the device; the UI keeps at
+     * most a bounded in-memory LRU while the thread is on screen.
+     */
+    suspend fun binary(method: String, path: String, query: Map<String, String?> = emptyMap()): ApiResult<ByteArray> {
+        val request = newRequest(method, path, query = query)
+        val call = client.newCall(request)
+        return try {
+            val response = call.await()
+            val bytes = response.body?.bytes()
+            if (!response.isSuccessful || bytes == null) {
+                val text = bytes?.let { String(it, Charsets.UTF_8).take(400) }.orEmpty()
+                val headers = response.headers.names().associateWith { response.header(it).orEmpty() }
+                ApiResult.Failure(parseError(response.code, text, headers))
+            } else {
+                ApiResult.Success(bytes, response.code)
+            }
+        } catch (io: IOException) {
+            ApiResult.Failure(ApiError(0, "Network error: ${io.message ?: io::class.java.simpleName}", transport = true))
+        }
+    }
+
+    /** Absolute URL for a path on the configured gateway (used by Coil for avatars/media). */
+    fun absoluteUrl(path: String): String =
+        if (path.startsWith("http://", true) || path.startsWith("https://", true)) path
+        else buildUrl(path)
+
+    /**
      * Call `method path` and decode the JSON body into T with kotlinx.serialization.
      * `204`/empty bodies yield `null` as T? — callers use `ApiResult<Unit>` semantics via [executeUnit].
      */

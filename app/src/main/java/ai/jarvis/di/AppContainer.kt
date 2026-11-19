@@ -12,6 +12,7 @@ import ai.jarvis.data.api.HttpCore
 import ai.jarvis.data.api.OpenWaApi
 import ai.jarvis.data.api.SessionManager
 import ai.jarvis.data.api.SocketIoManager
+import ai.jarvis.data.contacts.ChatDirectory
 import ai.jarvis.data.db.JarvisDatabase
 import ai.jarvis.domain.intents.IntentParser
 import ai.jarvis.whatsapp.bulk.BulkExecutor
@@ -42,6 +43,16 @@ class AppContainer(context: Context) {
     val socket = SocketIoManager(
         baseUrlProvider = { settings.settings.value.baseUrl },
         apiKeyProvider = { settings.settings.value.apiKey },
+    )
+
+    /**
+     * JID → saved name / push name / formatted number cache. RAM only (no disk writes) so the
+     * user's WhatsApp directory never persists on the device.
+     */
+    val chats = ChatDirectory(
+        api = api,
+        sessionIdProvider = { settings.settings.value.sessionId },
+        isLiveProvider = { settings.settings.value.mode != ai.jarvis.core.AppMode.DEMO },
     )
 
     val sessionManager = SessionManager(api, settings)

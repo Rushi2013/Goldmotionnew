@@ -68,7 +68,7 @@ fun MoreScreen(nav: NavHostController, container: AppContainer) {
         )),
         Group("Messaging", listOf(
             Entry(Icons.Filled.ChatBubble, "Media Send", Routes.MEDIA_SEND),
-            Entry(Icons.Filled.CameraAlt, "Status / Stories", Routes.STATUS),
+            Entry(Icons.Filled.CameraAlt, "Status, Views & Channels", Routes.STATUS_HUB),
             Entry(Icons.Filled.Group, "Groups", Routes.GROUPS),
             Entry(Icons.Filled.Campaign, "Channels", Routes.CHANNELS),
             Entry(Icons.Filled.Label, "Labels", Routes.LABELS),
