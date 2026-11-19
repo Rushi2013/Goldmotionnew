@@ -97,10 +97,16 @@ jobs:
           ./gradlew :app:compileDebugKotlin --stacktrace --continue > kotlin.log 2>&1
           CODE=$?
           echo "compiler exit=$CODE"
+          {
+            echo "### Kotlin compile exit=$CODE"
+            echo '```'
+            grep -E "^e: |error:|Caused by:|Execution failed|FAILURE:" kotlin.log | head -120
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=Kotlin exit::exit=$CODE"
           grep -E "^e: " kotlin.log | head -80 | while IFS= read -r line; do
             echo "::error title=Kotlin::${line//\%/%25}"
           done
-          grep -E "^(w: )" kotlin.log | head -10 >/dev/null
           if [ "$CODE" -ne 0 ]; then
             tail -60 kotlin.log
             exit 1
@@ -113,6 +119,12 @@ jobs:
           ./gradlew :app:assembleDebug --stacktrace > build.log 2>&1
           CODE=$?
           if [ "$CODE" -ne 0 ]; then
+            {
+              echo "### Debug build exit=$CODE"
+              echo '```'
+              grep -E "^e: |error:|FAILURE:|Caused by|Execution failed" build.log | head -120
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
             grep -E "^e: |error:|FAILURE:|Caused by|Execution failed" build.log | head -60 | while IFS= read -r line; do
               echo "::error title=Build::${line//\%/%25}"
             done
