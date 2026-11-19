@@ -150,7 +150,7 @@ class IntentParser(private val gateway: AiGateway? = null) {
         if (matchesAny(lower, listOf("unread", "unread messages", "naye message", "padho messages"))) {
             return IntentResult(IntentName.READ_UNREAD_MESSAGES, confidence = 0.9, requiresConfirmation = false, risk = ai.jarvis.core.RiskLevel.LOW, language = lang, source = "rules")
         }
-        val openChat = Regex("""(?i)\b([\p{L}\s]{2,30})\s+(ka|ki)\s+chat\s+(kholo|open|dikhao)\b""").find(text)
+        val openChat = Regex("""(?i)\b([\p{L}\p{M}\s]{2,30})\s+(ka|ki)\s+chat\s+(kholo|open|dikhao)\b""").find(text)
         if (openChat != null) {
             return IntentResult(
                 IntentName.OPEN_CHAT,
@@ -174,7 +174,7 @@ class IntentParser(private val gateway: AiGateway? = null) {
         }
 
         // --- 10. Location
-        val loc = Regex("""(?i)([\p{L}\s]{2,30})\s+(?:ko|ke liye)\s+location\s+(?:bhej|share|send)""").find(text)
+        val loc = Regex("""(?i)([\p{L}\p{M}\s]{2,30})\s+(?:ko|ke liye)\s+location\s+(?:bhej|share|send)""").find(text)
         if (loc != null) {
             return IntentResult(
                 IntentName.SHARE_LOCATION, slots = Slots(recipientName = loc.groupValues[1].trim()),
@@ -183,7 +183,7 @@ class IntentParser(private val gateway: AiGateway? = null) {
         }
 
         // --- 11. Mute
-        val mute = Regex("""(?i)([\p{L}\s]{2,30})\s+(?:ka|ki|ko)\s+(?:chat\s+)?mute""").find(text)
+        val mute = Regex("""(?i)([\p{L}\p{M}\s]{2,30})\s+(?:ka|ki|ko)\s+(?:chat\s+)?mute""").find(text)
         if (mute != null) {
             return IntentResult(IntentName.MUTE_CHAT, slots = Slots(chatName = mute.groupValues[1].trim()), confidence = 0.85, risk = ai.jarvis.core.RiskLevel.MEDIUM, language = lang, source = "rules")
         }
@@ -323,11 +323,11 @@ class IntentParser(private val gateway: AiGateway? = null) {
         //  order = (messageGroup, nameGroup)
         val patterns = listOf(
             // "send hi to Pramila on WhatsApp"
-            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\s]{2,30}?)(?:\s+on\s+whats\s*app|\s+whats\s*app(?:\s*(?:par|pe))?)?\s*[?.!]*\s*$""") to (1 to 2),
+            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\p{M}\s]{2,30}?)(?:\s+on\s+whats\s*app|\s+whats\s*app(?:\s*(?:par|pe))?)?\s*[?.!]*\s*$""") to (1 to 2),
             // "Pramila ko WhatsApp par hello bhej"
-            Regex("""(?i)(?:(?:whats\s*app)\s*(?:par|pe|se|me)?\s*)?([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)""") to (2 to 1),
+            Regex("""(?i)(?:(?:whats\s*app)\s*(?:par|pe|se|me)?\s*)?([\p{L}\p{M}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)""") to (2 to 1),
             // "hello likh ke Pramila ko bhej"
-            Regex("""(?i)["']?(.+?)["']?\s+likh\s*(?:ke|kar)?\s*([\p{L}\s]{2,30}?)\s*ko\s*bhej""") to (1 to 2),
+            Regex("""(?i)["']?(.+?)["']?\s+likh\s*(?:ke|kar)?\s*([\p{L}\p{M}\s]{2,30}?)\s*ko\s*bhej""") to (1 to 2),
         )
         for ((p, groups) in patterns) {
             val m = p.find(original) ?: continue
@@ -360,7 +360,7 @@ class IntentParser(private val gateway: AiGateway? = null) {
         }
 
         // "Pramila ko hi bhej" (name first, message = short token before)
-        val short = Regex("""(?i)^([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*["']?([\p{L}\p{N}\s!?.,]{0,60}?)["']?\s*(?:bhej\s*do|bhej|send)\s*$""").find(original)
+        val short = Regex("""(?i)^([\p{L}\p{M}\s]{2,30}?)\s*(?:ko|ke liye)\s*["']?([\p{L}\p{N}\s!?.,]{0,60}?)["']?\s*(?:bhej\s*do|bhej|send)\s*$""").find(original)
         if (short != null) {
             val name = cleanName(short.groupValues[1])
             val msg = short.groupValues[2].trim().trim('"', '\'')
@@ -403,7 +403,7 @@ class IntentParser(private val gateway: AiGateway? = null) {
     private fun contactTarget(original: String): String? {
         // "Pramila ke liye auto reply on" / "sirf Pramila ko auto reply"
         val patterns = listOf(
-            Regex("""(?i)([\p{L}\s]{2,30}?)\s*(?:ke liye|ka|ki|ko)\s*(?:auto\s*-?\s*reply|autopilot)"""),
+            Regex("""(?i)([\p{L}\p{M}\s]{2,30}?)\s*(?:ke liye|ka|ki|ko)\s*(?:auto\s*-?\s*reply|autopilot)"""),
         )
         for (p in patterns) {
             val m = p.find(original) ?: continue

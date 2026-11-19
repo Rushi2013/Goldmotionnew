@@ -105,7 +105,7 @@ class RecipientResolver {
 
     fun normalize(s: String): String = s
         .lowercase()
-        .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+        .replace(Regex("""[^\p{L}\p{M}\p{N}\s]"""), " ")
         .replace(Regex("""\s+"""), " ")
         .trim()
         .split(' ')
