@@ -283,7 +283,13 @@ fun WaveformBars(amplitudes: List<Float>, modifier: Modifier = Modifier, color: 
 }
 
 @Composable
-fun ChipRow(options: List<String>, selected: String?, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ChipRow(
+    options: List<String>,
+    selected: String?,
+    modifier: Modifier = Modifier,
+    // NOTE: onSelect MUST be last so `ChipRow(list, sel) { ... }` binds the trailing lambda here.
+    onSelect: (String) -> Unit,
+) {
     androidx.compose.foundation.lazy.LazyRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         // NOTE: the parameter must NOT be named `items` — that would shadow LazyListScope.items.
         items(count = options.size) { idx ->
