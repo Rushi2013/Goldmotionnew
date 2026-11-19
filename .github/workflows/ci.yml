@@ -45,7 +45,7 @@ jobs:
           set +e
           ./gradlew :app:testDebugUnitTest --stacktrace > test.log 2>&1
           CODE=$?
-          echo "exit=$CODE"
+          echo "gradle exit=$CODE"
           {
             echo "### Unit tests exit=$CODE"
             echo '#### Errors'
@@ -57,6 +57,8 @@ jobs:
             python3 .github/scripts/junit_summary.py app/build/test-results/testDebugUnitTest || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # Surface each failing test through the checks API (log download is not always available)
+          python3 .github/scripts/junit_failures.py app/build/test-results/testDebugUnitTest || true
           exit "$CODE"
 
       - name: Upload test reports
