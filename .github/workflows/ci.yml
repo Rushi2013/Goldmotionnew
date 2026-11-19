@@ -59,6 +59,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # Surface each failing test through the checks API (log download is not always available)
           python3 .github/scripts/junit_failures.py app/build/test-results/testDebugUnitTest || true
+          # When the test task never produced XML (compile error, executor crash) annotate the
+          # raw Gradle diagnostics instead, otherwise the failure is invisible.
+          python3 .github/scripts/gradle_errors.py test.log || true
           exit "$CODE"
 
       - name: Upload test reports
