@@ -68,10 +68,20 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
     var query by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf("All") }
     var pics by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
+    var refreshingContacts by remember { mutableStateOf(false) }
 
+    /**
+     * Three-stage load so the screen never sits on a spinner:
+     *   1. `/chats`          — one round-trip, list paints immediately (this is the "fast" part).
+     *   2. `/contacts`       — in the background, upgrades numbers to saved names.
+     *   3. avatars           — last, and never blocking.
+     * Previously `/chats` + `/contacts` were fetched serially and only then the UI updated, which
+     * is exactly the long "Loading…" the user reported.
+     */
     fun load() {
         scope.launch {
-            loading = true
+            loading = chats.isEmpty()          // keep the list visible on refresh
+            refreshingContacts = false
             error = null
             if (settings.mode == AppMode.DEMO) {
                 chats = container.demo.chats()
@@ -84,23 +94,39 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
                 loading = false
                 return@launch
             }
-            if (sessionId.isBlank()) { loading = false; return@launch }
-            // ChatDirectory merges /chats with /contacts so a saved number shows its name
-            // instead of the raw JID, and holds the result in RAM only.
-            when (val res = container.chats.refresh(force = true)) {
+            // ---- stage 1: chats only, publish at once
+            when (val res = container.chats.refreshChats(force = true)) {
                 is ApiResult.Success -> {
                     chats = container.chats.enrichedChats()
-                    // Avatars are optional and can be slow: fetch lazily in the background so the
-                    // list paints immediately (bounded to what is visible-ish).
-                    pics = chats.take(40).associate { it.id to container.chats.fetchProfilePic(it.id) }
+                    loading = false
                 }
-                is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
+                is ApiResult.Failure -> {
+                    error = "${res.error.headline}: ${res.error.oneLine}"
+                    loading = false
+                    return@launch
+                }
             }
-            loading = false
+            // ---- stage 2: contacts (names) in the background
+            refreshingContacts = true
+            // contacts (names) and groups run back-to-back but the list is already usable
+            container.chats.refreshContacts(force = true)
+            chats = container.chats.enrichedChats()
+            container.chats.refreshGroups(force = true)
+            chats = container.chats.enrichedChats()
+            refreshingContacts = false
+            // ---- stage 3: avatars, bounded, never blocking
+            pics = chats.take(30).associate { it.id to container.chats.fetchProfilePic(it.id) }
         }
     }
 
     LaunchedEffect(Unit) { load() }
+    // Contacts arriving in the background bump the catalogue revision — repaint names right away.
+    val revision by container.chats.revision.collectAsState()
+    LaunchedEffect(revision) {
+        if (revision > 0 && settings.mode != AppMode.DEMO) {
+            chats = container.chats.enrichedChats()
+        }
+    }
 
     val filtered = chats.filter { c ->
         val matchesQuery = query.isBlank() || c.name.contains(query, true) ||
@@ -140,6 +166,23 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
                     tint = colors.cyan,
                 )
             }
+        }
+
+        // Thin linear bar: visible while the list or the names are still streaming in.
+        if (loading || refreshingContacts) {
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = colors.cyan,
+                trackColor = colors.surfaceElevated,
+            )
+        }
+        if (refreshingContacts && chats.isNotEmpty()) {
+            Text(
+                "Saved names aa rahe hain…",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.muted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
         }
 
         OutlinedTextField(

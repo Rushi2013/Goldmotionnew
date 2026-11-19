@@ -40,6 +40,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -138,24 +140,60 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     }
 
     /**
+     * Infinite scroll upwards: reaching the top row pulls exactly one more page.
+     * Guarded by [loadingOlder]/[reachedStart] inside loadOlder() so a fast fling cannot
+     * fire ten requests at once.
+     */
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+            firstVisible <= 1 && info.totalItemsCount > 0
+        }.distinctUntilChanged().collect { atTop ->
+            if (atTop) loadOlder()
+        }
+    }
+
+    /**
      * Pull the next older page. WhatsApp history lives on the gateway, not on this device, so
      * "previous data" is streamed page by page and never written to storage.
+     */
+    /**
+     * Pull exactly ONE older page. Triggered by scrolling to the top, never eagerly: the user
+     * asked for "old messages aane chahiye jab niche scroll karu, ek baar me sab nahi".
      */
     fun loadOlder() {
         if (loadingOlder || reachedStart || messages.isEmpty()) return
         scope.launch {
             loadingOlder = true
-            val oldestMs = messages.firstOrNull()?.timestampMs ?: 0L
-            val before: Long? = if (oldestMs > 0) oldestMs else null
+            val offset = messages.size
             when (val res = container.api.messages(
-                settings.sessionId, chatId = chatId, limit = pageSize, orderBy = "asc", before = before,
+                settings.sessionId, chatId = chatId, limit = pageSize, offset = offset, orderBy = "asc",
             )) {
                 is ApiResult.Success -> {
                     val older = res.data.messages.filter { m -> messages.none { it.id == m.id } }
                     if (older.isEmpty()) reachedStart = true
                     else messages = (older + messages).sortedBy { it.timestampMs }
                 }
-                is ApiResult.Failure -> lastOutcome = "Purane messages: ${res.error.oneLine}"
+                is ApiResult.Failure -> {
+                    // Offset paging unsupported on some engines → fall back to a time cursor.
+                    val oldestMs = messages.firstOrNull()?.timestampMs ?: 0L
+                    if (oldestMs > 0) {
+                        when (val alt = container.api.messages(
+                            settings.sessionId, chatId = chatId, limit = pageSize,
+                            orderBy = "asc", before = oldestMs,
+                        )) {
+                            is ApiResult.Success -> {
+                                val older = alt.data.messages.filter { m -> messages.none { it.id == m.id } }
+                                if (older.isEmpty()) reachedStart = true
+                                else messages = (older + messages).sortedBy { it.timestampMs }
+                            }
+                            is ApiResult.Failure -> lastOutcome = "Purane messages: ${alt.error.oneLine}"
+                        }
+                    } else {
+                        lastOutcome = "Purane messages: ${res.error.oneLine}"
+                    }
+                }
             }
             loadingOlder = false
         }
@@ -259,20 +297,23 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 messages.isEmpty() -> EmptyState("Koi message nahi", "Pehla message bhejo.")
                 else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     item(key = "older") {
-                        if (!reachedStart) {
-                            Row(
-                                Modifier.fillMaxWidth().padding(8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                            ) {
-                                if (loadingOlder) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            when {
+                                loadingOlder -> {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.cyan,
+                                    )
+                                    Spacer(Modifier.width(8.dp))
                                     Text("Purane messages aa rahe hain…", style = MaterialTheme.typography.labelSmall, color = colors.muted)
-                                } else {
-                                    TextButton(onClick = { loadOlder() }) { Text("⤴ Purane messages load karo") }
                                 }
-                            }
-                        } else {
-                            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
-                                Text("Chat ki shuruaat", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                                reachedStart ->
+                                    Text("Chat ki shuruaat", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                                else ->
+                                    Text("Upar scroll karo — purane messages load honge", style = MaterialTheme.typography.labelSmall, color = colors.muted)
                             }
                         }
                     }

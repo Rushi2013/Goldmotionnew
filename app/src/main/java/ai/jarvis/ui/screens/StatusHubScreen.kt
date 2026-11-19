@@ -94,6 +94,9 @@ fun StatusHubScreen(container: AppContainer, nav: NavHostController) {
     var channels by remember { mutableStateOf<List<ChannelDto>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    /** Channels live on their own error channel — a 501 there must never blank out stories. */
+    var channelsError by remember { mutableStateOf<String?>(null) }
+    var channelsLoading by remember { mutableStateOf(true) }
     var note by remember { mutableStateOf<String?>(null) }
     var showComposer by remember { mutableStateOf(false) }
     var showJoin by remember { mutableStateOf(false) }
@@ -143,14 +146,39 @@ fun StatusHubScreen(container: AppContainer, nav: NavHostController) {
                     mine = own
                     theirs = rest
                 }
-                is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
-            }
-            when (val res = container.api.listChannels(settings.sessionId)) {
-                is ApiResult.Success -> channels = res.data
-                is ApiResult.Failure -> if (error == null) {
-                    error = "Channels: ${res.error.headline}: ${res.error.oneLine}"
+                is ApiResult.Failure -> {
+                    // A 501 on /status means this engine has no stories support at all. Say that
+                    // plainly instead of a scary "Status load nahi hua" with a Retry button.
+                    error = if (res.error.isUnsupported || res.error.status == 501) {
+                        "Is gateway engine par status/stories support nahi hai (HTTP 501). " +
+                            "Gateway me baad me enable hone par yahin apne aap dikhega."
+                    } else {
+                        "${res.error.headline}: ${res.error.oneLine}"
+                    }
+                    mine = emptyList()
+                    theirs = emptyList()
                 }
             }
+            // Channels are fetched independently: engines that do not implement newsletters
+            // answer HTTP 501 "getSubscribedChannels". That used to set the *page* error and hide
+            // the whole Status screen — exactly the screenshot the user sent.
+            channelsLoading = true
+            when (val res = container.api.listChannels(settings.sessionId)) {
+                is ApiResult.Success -> {
+                    channels = res.data
+                    channelsError = null
+                }
+                is ApiResult.Failure -> {
+                    channels = emptyList()
+                    channelsError = if (res.error.isUnsupported || res.error.status == 501) {
+                        "Is gateway engine par channels (newsletters) support nahi hain — " +
+                            "status/stories phir bhi chal rahe hain. Channels ke liye gateway update karo."
+                    } else {
+                        "${res.error.headline}: ${res.error.oneLine}"
+                    }
+                }
+            }
+            channelsLoading = false
             loading = false
         }
     }
@@ -229,6 +257,8 @@ fun StatusHubScreen(container: AppContainer, nav: NavHostController) {
                 )
                 else -> ChannelsTab(
                     channels = channels,
+                    channelsError = channelsError,
+                    channelsLoading = channelsLoading,
                     live = live,
                     sessionId = settings.sessionId,
                     container = container,
@@ -506,6 +536,8 @@ private fun ContactStatusTab(
 @Composable
 private fun ChannelsTab(
     channels: List<ChannelDto>,
+    channelsError: String?,
+    channelsLoading: Boolean,
     live: Boolean,
     sessionId: String,
     container: AppContainer,
@@ -535,6 +567,24 @@ private fun ChannelsTab(
     }
 
     Column(Modifier.fillMaxSize()) {
+        // Engine-level 501 lives here as a banner, not as a page error: search + invite-code
+        // join keep working even when subscribed-channel listing is unsupported.
+        channelsError?.let { msg ->
+            JarvisCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+                Column(Modifier.padding(10.dp)) {
+                    StatusChip("CHANNELS LIMITED", Tone.WARN)
+                    Spacer(Modifier.height(4.dp))
+                    Text(msg, style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                }
+            }
+        }
+        if (channelsLoading) {
+            androidx.compose.material3.LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = colors.cyan,
+                trackColor = colors.surfaceElevated,
+            )
+        }
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = search, onValueChange = { search = it },
@@ -576,8 +626,12 @@ private fun ChannelsTab(
             if (channels.isEmpty()) {
                 item {
                     EmptyState(
-                        "Abhi koi channel nahi",
-                        "Public channel search karo ya invite code se join karo — joined channels yahan niche dikhenge.",
+                        if (channelsError != null) "Channel list available nahi" else "Abhi koi channel nahi",
+                        if (channelsError != null)
+                            "Is engine par subscribed channels list nahi hoti. Neeche se public channel search karo " +
+                                "ya invite code se join karo — join hone ke baad bhi yahin dikhega."
+                        else
+                            "Public channel search karo ya invite code se join karo — joined channels yahan niche dikhenge.",
                     )
                 }
             }
