@@ -304,15 +304,14 @@ fun BulkScreen(container: AppContainer, nav: NavHostController) {
 
         showPreviewJson?.let {
             Spacer(Modifier.height(8.dp))
+            val route = if (type in setOf("TEXT", "IMAGE", "VIDEO", "AUDIO", "DOCUMENT")) "send-bulk" else "sequential single send"
             CodeBlock(
-                """
-                POST /api/sessions/{id}/messages/send-bulk
-                {
-                  "messages": [ ${recipients.size <= 100 ? recipients.size else 100} items ],   // max 100/request
-                  "options": {"delayBetweenMessages": ${delaySeconds * 1000}, "randomizeDelay": $randomize, "stopOnError": $stopOnError}
-                }
-                type=$type  route=${if (type in setOf("TEXT","IMAGE","VIDEO","AUDIO","DOCUMENT")) "send-bulk" else "sequential single send"}
-                """.trimIndent(),
+                "POST /api/sessions/{id}/messages/send-bulk\n" +
+                    "{\n" +
+                    "  \"messages\": [ ${minOf(recipients.size, 100)} items ],  // max 100/request\n" +
+                    "  \"options\": {\"delayBetweenMessages\": ${delaySeconds * 1000}, \"randomizeDelay\": $randomize, \"stopOnError\": $stopOnError}\n" +
+                    "}\n" +
+                    "type=$type  route=$route",
             )
         }
 

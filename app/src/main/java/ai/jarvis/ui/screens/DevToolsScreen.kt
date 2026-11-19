@@ -149,8 +149,9 @@ fun DevToolsScreen(container: AppContainer, nav: NavHostController) {
                         "Socket: $rt",
                         when (rt) {
                             ai.jarvis.data.api.SocketIoManager.RealtimeState.CONNECTED -> Tone.OK
+                            ai.jarvis.data.api.SocketIoManager.RealtimeState.CONNECTING -> Tone.INFO
                             ai.jarvis.data.api.SocketIoManager.RealtimeState.ERROR -> Tone.ERROR
-                            else -> Tone.NEUTRAL,
+                            ai.jarvis.data.api.SocketIoManager.RealtimeState.DISCONNECTED -> Tone.NEUTRAL
                         },
                     )
                     container.socket.lastError()?.let {
