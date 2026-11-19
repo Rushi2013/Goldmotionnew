@@ -174,6 +174,25 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
         return "$base/models/$safeModel:generateContent?key=${config.apiKey.trim()}"
     }
 
+    /**
+     * Turn a Gemini failure into an actionable sentence. The 403/404 cases below are by far the
+     * most common and each has a different fix, so a bare status code is useless to the user.
+     */
+    private fun geminiHint(code: Int, model: String, body: String): String = when {
+        body.contains("PERMISSION_DENIED", true) && body.contains("not found", true) ->
+            "Model '$model' is key ke liye available nahi. Model field me gemini-1.5-flash ya " +
+                "gemini-2.0-flash likho (preview models sab keys par open nahi hote)."
+        body.contains("API_KEY_INVALID", true) || body.contains("API key not valid", true) ->
+            "API key galat hai — aistudio.google.com se nayi key banao."
+        code == 403 ->
+            "Permission denied: model '$model' is project ke liye enabled nahi ya key restricted hai."
+        code == 404 ->
+            "Model '$model' nahi mila — spell check karo (gemini-1.5-flash / gemini-2.0-flash)."
+        code == 429 ->
+            "Rate limit / quota khatam — thoda ruk kar try karo."
+        else -> body.take(160)
+    }
+
     /** Human-readable hint shown next to the Test LLM result. */
     private fun baseUrlWarning(): String? {
         val raw = config.baseUrl.trim()
@@ -198,7 +217,7 @@ class GeminiProvider(private val config: LlmConfig) : LlmProvider {
                 val latency = System.currentTimeMillis() - started
                 val warn = baseUrlWarning()?.let { " · $it" }.orEmpty()
                 if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}$warn", config.model)
-                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}$warn", config.model)
+                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${geminiHint(resp.code, config.model, text)}$warn", config.model)
             }
         } catch (e: Exception) {
             ProviderHealth(false, id, System.currentTimeMillis() - started, e.message ?: "network error", config.model)

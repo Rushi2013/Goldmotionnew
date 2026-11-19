@@ -79,6 +79,9 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     var menuFor by remember { mutableStateOf<MessageDto?>(null) }
     var chatTitle by remember { mutableStateOf(ai.jarvis.data.contacts.ChatDirectory.displayFallback(chatId)) }
     var chatSubtitle by remember { mutableStateOf(if (chatId.endsWith("@g.us")) "Group chat" else "Individual chat") }
+    var pageSize by remember { mutableStateOf(150) }
+    var loadingOlder by remember { mutableStateOf(false) }
+    var reachedStart by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     fun load() {
@@ -91,6 +94,7 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 return@launch
             }
             val page = settings.historyPageSize.coerceIn(20, 500)
+            pageSize = page
             when (val res = container.api.messages(settings.sessionId, chatId = chatId, limit = page, orderBy = "asc")) {
                 is ApiResult.Success -> {
                     messages = res.data.messages.sortedBy { it.timestampMs }
@@ -131,6 +135,30 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
     }
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+
+    /**
+     * Pull the next older page. WhatsApp history lives on the gateway, not on this device, so
+     * "previous data" is streamed page by page and never written to storage.
+     */
+    fun loadOlder() {
+        if (loadingOlder || reachedStart || messages.isEmpty()) return
+        scope.launch {
+            loadingOlder = true
+            val oldestMs = messages.firstOrNull()?.timestampMs ?: 0L
+            val before: Long? = if (oldestMs > 0) oldestMs else null
+            when (val res = container.api.messages(
+                settings.sessionId, chatId = chatId, limit = pageSize, orderBy = "asc", before = before,
+            )) {
+                is ApiResult.Success -> {
+                    val older = res.data.messages.filter { m -> messages.none { it.id == m.id } }
+                    if (older.isEmpty()) reachedStart = true
+                    else messages = (older + messages).sortedBy { it.timestampMs }
+                }
+                is ApiResult.Failure -> lastOutcome = "Purane messages: ${res.error.oneLine}"
+            }
+            loadingOlder = false
+        }
     }
 
     fun send() {
@@ -230,6 +258,24 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
                 error != null -> ErrorState("Thread load nahi hua", error!!) { load() }
                 messages.isEmpty() -> EmptyState("Koi message nahi", "Pehla message bhejo.")
                 else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    item(key = "older") {
+                        if (!reachedStart) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(8.dp),
+                                horizontalArrangement = Arrangement.Center,
+                            ) {
+                                if (loadingOlder) {
+                                    Text("Purane messages aa rahe hain…", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                                } else {
+                                    TextButton(onClick = { loadOlder() }) { Text("⤴ Purane messages load karo") }
+                                }
+                            }
+                        } else {
+                            Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.Center) {
+                                Text("Chat ki shuruaat", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                            }
+                        }
+                    }
                     items(messages, key = { it.id }) { msg ->
                         MessageBubble(
                             msg = msg,

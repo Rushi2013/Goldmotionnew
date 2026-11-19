@@ -198,7 +198,31 @@ fun SettingsScreen(container: AppContainer, nav: NavHostController) {
                                 modifier = Modifier
                                     .then(if (sel) Modifier else Modifier)
                                     .padding(6.dp)
-                                    .clickable { llmProvider = p },
+                                    .clickable {
+                                        // Switching the chip must also switch the endpoint, otherwise a
+                                        // leftover OpenAI URL gets posted with Gemini's key → HTTP 403.
+                                        llmProvider = p
+                                        when (p) {
+                                            "gemini" -> {
+                                                if (!llmBase.contains("generativelanguage")) {
+                                                    llmBase = "https://generativelanguage.googleapis.com/v1beta"
+                                                }
+                                                if (llmModel.isBlank() || llmModel.contains("gpt")) llmModel = "gemini-2.0-flash"
+                                            }
+                                            "openai-compat" -> {
+                                                if (!llmBase.contains("openai.com")) llmBase = "https://api.openai.com/v1"
+                                                if (llmModel.isBlank()) llmModel = "gpt-4o-mini"
+                                            }
+                                            "ollama" -> {
+                                                if (llmBase.contains("openai.com") || llmBase.contains("googleapis")) {
+                                                    llmBase = "http://10.0.2.2:11434/v1"
+                                                }
+                                                if (llmModel.contains("gpt") || llmModel.contains("gemini")) llmModel = "llama3.1"
+                                            }
+                                            else -> Unit
+                                        }
+                                        llmResult = null
+                                    },
                             )
                         }
                     }

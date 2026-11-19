@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -66,6 +67,7 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     var tab by remember { mutableStateOf("All") }
+    var pics by remember { mutableStateOf<Map<String, String?>>(emptyMap()) }
 
     fun load() {
         scope.launch {
@@ -86,7 +88,12 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
             // ChatDirectory merges /chats with /contacts so a saved number shows its name
             // instead of the raw JID, and holds the result in RAM only.
             when (val res = container.chats.refresh(force = true)) {
-                is ApiResult.Success -> chats = container.chats.enrichedChats()
+                is ApiResult.Success -> {
+                    chats = container.chats.enrichedChats()
+                    // Avatars are optional and can be slow: fetch lazily in the background so the
+                    // list paints immediately (bounded to what is visible-ish).
+                    pics = chats.take(40).associate { it.id to container.chats.fetchProfilePic(it.id) }
+                }
                 is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
             }
             loading = false
@@ -166,7 +173,11 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
             )
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(filtered, key = { it.id }) { chat ->
-                    ChatRow(chat) { nav.navigate(Routes.thread(chat.id)) }
+                    ChatRow(
+                        chat = chat,
+                        picUrl = pics[chat.id]?.let { container.api.mediaUrl(it) },
+                        apiKey = settings.apiKey.takeIf { it.isNotBlank() },
+                    ) { nav.navigate(Routes.thread(chat.id)) }
                 }
             }
         }
@@ -174,7 +185,7 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
 }
 
 @Composable
-private fun ChatRow(chat: ChatSummaryDto, onClick: () -> Unit) {
+private fun ChatRow(chat: ChatSummaryDto, picUrl: String? = null, apiKey: String? = null, onClick: () -> Unit) {
     val colors = LocalJarvisColors.current
     Row(
         Modifier
@@ -183,17 +194,31 @@ private fun ChatRow(chat: ChatSummaryDto, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val context = androidx.compose.ui.platform.LocalContext.current
         Box(
             Modifier.size(46.dp).clip(CircleShape).background(
                 if (chat.isGroup) colors.blue.copy(alpha = 0.18f) else colors.cyan.copy(alpha = 0.14f)
             ),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                chat.name.take(1).uppercase().ifBlank { "?" },
-                style = MaterialTheme.typography.titleMedium,
-                color = if (chat.isGroup) colors.blue else colors.cyan,
-            )
+            if (picUrl != null) {
+                coil.compose.AsyncImage(
+                    model = coil.request.ImageRequest.Builder(context)
+                        .data(picUrl)
+                        .apply { apiKey?.let { addHeader("X-API-Key", it) } }
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = chat.name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                )
+            } else {
+                Text(
+                    chat.name.take(1).uppercase().ifBlank { "?" },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (chat.isGroup) colors.blue else colors.cyan,
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

@@ -63,8 +63,45 @@ class ChatDirectory(
             ?: contacts.firstOrNull { digitsOf(it.number) == digits }
     }
 
-    fun profilePicFor(chatId: String): String? =
-        contactFor(chatId)?.profilePicUrl?.takeIf { it.isNotBlank() }
+    private val picCache = mutableMapOf<String, String?>()
+
+    fun profilePicFor(chatId: String): String? = picCache[chatId]
+
+    /**
+     * Ask the gateway for a profile picture when the contact list did not carry one.
+     * Only the resulting URL is cached (in RAM); the image bytes are Coil's business and are
+     * never persisted by this app.
+     */
+    suspend fun fetchProfilePic(chatId: String): String? {
+        picCache[chatId]?.let { return it }
+        contactFor(chatId)?.profilePicUrl?.takeIf { it.isNotBlank() }?.let {
+            picCache[chatId] = it
+            return it
+        }
+        if (!isLiveProvider()) return null
+        val sid = sessionIdProvider().takeIf { it.isNotBlank() } ?: return null
+        return when (val res = api.contactProfilePicture(sid, chatId)) {
+            is ApiResult.Success -> {
+                val el = res.data
+                val url = when (el) {
+                    is kotlinx.serialization.json.JsonObject -> {
+                        val obj = el["data"] as? kotlinx.serialization.json.JsonObject ?: el
+                        (obj["url"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                            ?: (obj["profilePicUrl"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                            ?: (obj["picture"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    }
+                    is kotlinx.serialization.json.JsonPrimitive -> el.content
+                    else -> null
+                }
+                picCache[chatId] = url
+                url
+            }
+            is ApiResult.Failure -> {
+                picCache[chatId] = null
+                null
+            }
+        }
+    }
 
     fun isGroup(chatId: String): Boolean =
         chatId.endsWith("@g.us", true) || chat(chatId)?.isGroup == true
