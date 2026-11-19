@@ -455,8 +455,15 @@ class AutoReplyEngine(
         data class Blocked(val reason: String) : HandleResult()
 
         companion object {
-            /** Lower-case factory used throughout the pipeline. */
+            /** Lower-case factories used throughout the pipeline. */
             fun ignored(reason: String): HandleResult = Ignored(reason)
+            fun blocked(reason: String): HandleResult = Blocked(reason)
+            fun silenced(classification: Classification, reason: String): HandleResult =
+                Silenced(classification, reason)
+            fun escalated(classification: Classification, reason: String, escalationId: Long): HandleResult =
+                Escalated(classification, reason, escalationId)
+            fun autoSent(classification: Classification, draft: String, messageId: String): HandleResult =
+                AutoSent(classification, draft, messageId)
         }
 
         val summary: String

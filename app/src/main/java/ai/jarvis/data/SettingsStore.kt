@@ -98,7 +98,7 @@ class SettingsStore(context: Context) {
     private fun load(): AppSettings {
         val raw = prefs.getString(KEY_SETTINGS, null) ?: return AppSettings()
         return try {
-            json.decodeFromString<AppSettings>(raw)
+            json.decodeFromString(AppSettings.serializer(), raw)
         } catch (_: Exception) {
             AppSettings()
         }
@@ -107,13 +107,13 @@ class SettingsStore(context: Context) {
     fun update(transform: (AppSettings) -> AppSettings): AppSettings {
         val next = transform(_settings.value)
         _settings.value = next
-        prefs.edit().putString(KEY_SETTINGS, json.encodeToString(next)).apply()
+        prefs.edit().putString(KEY_SETTINGS, json.encodeToString(AppSettings.serializer(), next)).apply()
         return next
     }
 
     fun replace(next: AppSettings) {
         _settings.value = next
-        prefs.edit().putString(KEY_SETTINGS, json.encodeToString(next)).apply()
+        prefs.edit().putString(KEY_SETTINGS, json.encodeToString(AppSettings.serializer(), next)).apply()
     }
 
     fun setRemote(baseUrl: String, apiKey: String, sessionId: String, sessionName: String, mode: AppMode) {

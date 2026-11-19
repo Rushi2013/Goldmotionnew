@@ -153,7 +153,7 @@ class RecipientResolver {
             'त' to "t", 'थ' to "th", 'द' to "d", 'ध' to "dh", 'न' to "n",
             'प' to "p", 'फ' to "ph", 'ब' to "b", 'भ' to "bh", 'म' to "m",
             'य' to "y", 'र' to "r", 'ल' to "l", 'व' to "v", 'श' to "sh",
-            'ष' to "sh", 'स' to "s", 'ह' to "h", 'ळ' to "l", 'क़' to "q",
+            'ष' to "sh", 'स' to "s", 'ह' to "h", 'ळ' to "l",
             'ा' to "a", 'ि' to "i", 'ी' to "i", 'ु' to "u", 'ू' to "u",
             'े' to "e", 'ै' to "ai", 'ो' to "o", 'ौ' to "au", 'ं' to "n",
             'ँ' to "n", 'ः' to "h", '्' to "",

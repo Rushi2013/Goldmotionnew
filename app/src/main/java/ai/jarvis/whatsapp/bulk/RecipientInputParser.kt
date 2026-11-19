@@ -40,7 +40,14 @@ object RecipientInputParser {
             .flatMap { if (it.contains(';') && !it.contains(',')) it.split(';') else listOf(it) }
             .map { it.trim() }
             .filter { it.isNotBlank() && !it.startsWith("#") }
-        return build(lines.associateWith { splitLoose(it) }, defaultCountryCode)
+        val entries = LinkedHashMap<String, ParsedRecipient>()
+        for (line in lines) {
+            val (number, name) = splitLoose(line)
+            val r = toRecipient(number, name, defaultCountryCode)
+            // keep the first occurrence of a chatId; duplicates are counted in build()
+            entries.putIfAbsent(r.chatId.ifBlank { "invalid:${r.raw}" }, r)
+        }
+        return build(entries, defaultCountryCode)
     }
 
     fun parseCsv(content: String, defaultCountryCode: String = "91"): ParseSummary {

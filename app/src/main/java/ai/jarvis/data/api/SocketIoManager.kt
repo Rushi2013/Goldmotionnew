@@ -84,7 +84,13 @@ class SocketIoManager(
             s.on(Socket.EVENT_CONNECT) {
                 lastError = null
                 _connection.value = RealtimeState.CONNECTED
-                subscribe(s, "*", listOf("*"))
+                // subscribe on THIS socket instance (the field is assigned after construction)
+                val payload = JSONObject().apply {
+                    put("type", "subscribe")
+                    put("sessionId", "*")
+                    put("events", org.json.JSONArray(listOf("*")))
+                }
+                s.emit("message", payload)
             }
             s.on(Socket.EVENT_DISCONNECT) { _connection.value = RealtimeState.DISCONNECTED }
             s.on(Socket.EVENT_CONNECT_ERROR) { args ->
