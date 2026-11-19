@@ -66,6 +66,21 @@ fun MediaSendScreen(container: AppContainer, nav: NavHostController) {
     var ptt by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var pickedBase64 by remember { mutableStateOf<String?>(null) }
+    var pickedMime by remember { mutableStateOf<String?>(null) }
+    var pickedName by remember { mutableStateOf<String?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            val pair = uriToBase64(context, uri)
+            pickedBase64 = pair?.first
+            pickedMime = pair?.second
+            pickedName = uri.lastPathSegment?.substringAfterLast('/')
+            result = if (pair == null) "❌ File padhi nahi ja saki" else "📎 ${pair.second} · ${pair.first.length / 1365} KB (memory me)"
+        }
+    }
 
     val kinds = listOf("TEXT", "IMAGE", "VIDEO", "AUDIO", "DOCUMENT", "STICKER", "LOCATION", "CONTACT", "POLL", "TEMPLATE", "PRODUCT")
 
@@ -112,6 +127,16 @@ fun MediaSendScreen(container: AppContainer, nav: NavHostController) {
                         )
                         "IMAGE", "VIDEO", "STICKER" -> {
                             OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Media URL") }, singleLine = true)
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(onClick = { picker.launch(arrayOf("image/*", "video/*")) }) {
+                                Text(if (pickedBase64 == null) "Gallery se pick karo" else "Pick again")
+                            }
+                            pickedMime?.let { m ->
+                                Text(
+                                    "Picked: ${pickedName ?: "file"} · $m · ${(pickedBase64?.length ?: 0) / 1365} KB (memory me, device par save nahi)",
+                                    style = MaterialTheme.typography.labelSmall, color = colors.muted,
+                                )
+                            }
                             if (kind != "STICKER") {
                                 Spacer(Modifier.height(6.dp))
                                 OutlinedTextField(value = caption, onValueChange = { caption = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Caption") }, singleLine = true)
@@ -119,6 +144,13 @@ fun MediaSendScreen(container: AppContainer, nav: NavHostController) {
                         }
                         "AUDIO" -> {
                             OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Audio URL") }, singleLine = true)
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(onClick = { picker.launch(arrayOf("audio/*")) }) {
+                                Text(if (pickedBase64 == null) "Audio pick karo" else "Pick again")
+                            }
+                            pickedMime?.let { m ->
+                                Text("Picked: ${pickedName ?: "audio"} · $m", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                            }
                             androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
                                 androidx.compose.material3.Checkbox(checked = ptt, onCheckedChange = { ptt = it })
                                 Text("Voice note (ptt)", style = MaterialTheme.typography.bodySmall, color = colors.text)
@@ -126,6 +158,13 @@ fun MediaSendScreen(container: AppContainer, nav: NavHostController) {
                         }
                         "DOCUMENT" -> {
                             OutlinedTextField(value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Document URL") }, singleLine = true)
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }) {
+                                Text(if (pickedBase64 == null) "File pick karo" else "Pick again")
+                            }
+                            pickedMime?.let { m ->
+                                Text("Picked: ${pickedName ?: "file"} · $m", style = MaterialTheme.typography.labelSmall, color = colors.muted)
+                            }
                             Spacer(Modifier.height(6.dp))
                             OutlinedTextField(value = filename, onValueChange = { filename = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Filename") }, singleLine = true)
                         }
@@ -172,11 +211,11 @@ fun MediaSendScreen(container: AppContainer, nav: NavHostController) {
                         val sid = settings.sessionId
                         val res: ApiResult<Any> = when (kind) {
                             "TEXT" -> container.api.sendText(sid, target, text).mapAny()
-                            "IMAGE" -> container.api.sendImage(sid, target, url = url.ifBlank { null }, caption = caption.ifBlank { null }).mapAny()
-                            "VIDEO" -> container.api.sendVideo(sid, target, url = url.ifBlank { null }, caption = caption.ifBlank { null }).mapAny()
-                            "AUDIO" -> container.api.sendAudio(sid, target, url = url.ifBlank { null }, ptt = ptt).mapAny()
-                            "DOCUMENT" -> container.api.sendDocument(sid, target, url = url.ifBlank { null }, filename = filename.ifBlank { null }).mapAny()
-                            "STICKER" -> container.api.sendSticker(sid, target, url = url.ifBlank { null }).mapAny()
+                            "IMAGE" -> container.api.sendImage(sid, target, url = url.ifBlank { null }, base64 = pickedBase64, mimetype = pickedMime, caption = caption.ifBlank { null }).mapAny()
+                            "VIDEO" -> container.api.sendVideo(sid, target, url = url.ifBlank { null }, base64 = pickedBase64, mimetype = pickedMime, caption = caption.ifBlank { null }).mapAny()
+                            "AUDIO" -> container.api.sendAudio(sid, target, url = url.ifBlank { null }, base64 = pickedBase64, mimetype = pickedMime, ptt = ptt).mapAny()
+                            "DOCUMENT" -> container.api.sendDocument(sid, target, url = url.ifBlank { null }, base64 = pickedBase64, mimetype = pickedMime, filename = filename.ifBlank { pickedName }).mapAny()
+                            "STICKER" -> container.api.sendSticker(sid, target, url = url.ifBlank { null }, base64 = pickedBase64, mimetype = pickedMime ?: "image/webp").mapAny()
                             "LOCATION" -> container.api.sendLocation(
                                 sid, target, lat.toDoubleOrNull() ?: 0.0, lon.toDoubleOrNull() ?: 0.0, caption.ifBlank { null },
                             ).mapAny()
@@ -239,3 +278,15 @@ private fun ApiResult<ai.jarvis.data.api.ApiOutcome>.mapAnyOutcome(): ApiResult<
     is ApiResult.Success -> ApiResult.Success(data, status)
     is ApiResult.Failure -> this
 }
+
+/**
+ * Reads a user-picked content Uri straight into base64. Nothing is copied to app storage —
+ * the bytes go from the SAF stream to the request body and are then dropped, which is what
+ * "device me store nahi hona chahiye" requires.
+ */
+private fun uriToBase64(context: android.content.Context, uri: android.net.Uri): Pair<String, String>? =
+    runCatching {
+        val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) to mime
+    }.getOrNull()
