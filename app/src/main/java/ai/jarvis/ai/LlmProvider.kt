@@ -95,9 +95,8 @@ class OpenAiCompatibleProvider(private val config: LlmConfig) : LlmProvider {
             client.newCall(req).execute().use { resp ->
                 val text = resp.body?.string().orEmpty()
                 val latency = System.currentTimeMillis() - started
-                val warn = baseUrlWarning()?.let { " · $it" }.orEmpty()
-                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}$warn", config.model)
-                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}$warn", config.model)
+                if (resp.isSuccessful) ProviderHealth(true, id, latency, "OK · ${config.model}", config.model)
+                else ProviderHealth(false, id, latency, "HTTP ${resp.code}: ${text.take(160)}", config.model)
             }
         } catch (e: Exception) {
             ProviderHealth(false, id, System.currentTimeMillis() - started, e.message ?: "network error", config.model)

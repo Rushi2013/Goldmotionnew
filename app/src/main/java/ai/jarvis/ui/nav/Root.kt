@@ -52,6 +52,7 @@ import ai.jarvis.ui.screens.SearchScreen
 import ai.jarvis.ui.screens.SessionsScreen
 import ai.jarvis.ui.screens.SettingsScreen
 import ai.jarvis.ui.screens.StatsScreen
+import ai.jarvis.ui.screens.StatusHubScreen
 import ai.jarvis.ui.screens.StatusScreen
 import ai.jarvis.ui.screens.TemplatesScreen
 import ai.jarvis.ui.screens.ThreadScreen

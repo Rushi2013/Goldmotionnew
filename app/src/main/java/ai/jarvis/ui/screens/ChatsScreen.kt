@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -127,8 +128,8 @@ fun ChatsScreen(container: AppContainer, nav: NavHostController) {
             }
             IconButton(onClick = { nav.navigate(Routes.STATUS_HUB) }) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Filled.RemoveRedEye,
-                    contentDescription = "Status",
+                    Icons.Filled.AccountCircle,
+                    contentDescription = "Status & views",
                     tint = colors.cyan,
                 )
             }

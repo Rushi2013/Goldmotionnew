@@ -25,7 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.RemoveRedEye
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -352,7 +352,7 @@ private fun MyStatusTab(
                     Spacer(Modifier.height(10.dp))
                     // ---- the interaction strip the user asked for -------------------------
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        InteractionStat(Icons.Filled.RemoveRedEye, s.resolvedViews, "views")
+                        InteractionStat(Icons.Filled.Visibility, s.resolvedViews, "views")
                         InteractionStat(Icons.Filled.Favorite, s.resolvedLikes, "likes")
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = { onOpen(s) }) { Text("Interactions") }
@@ -665,7 +665,7 @@ private fun StatusDetailDialog(
                 Text(relativeAge(status.epochMs), style = MaterialTheme.typography.labelSmall, color = colors.muted)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    InteractionStat(Icons.Filled.RemoveRedEye, status.resolvedViews ?: viewers.size.takeIf { viewers.isNotEmpty() }, "views")
+                    InteractionStat(Icons.Filled.Visibility, status.resolvedViews ?: viewers.size.takeIf { viewers.isNotEmpty() }, "views")
                     InteractionStat(Icons.Filled.Favorite, status.resolvedLikes ?: likers.size.takeIf { likers.isNotEmpty() }, "likes")
                 }
                 Spacer(Modifier.height(10.dp))
