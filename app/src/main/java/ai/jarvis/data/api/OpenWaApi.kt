@@ -97,6 +97,13 @@ class OpenWaApi(private val http: HttpCore) {
 
     suspend fun getSession(id: String): ApiResult<SessionDto> = http.call("GET", "/sessions/$id")
 
+    /**
+     * The logged-in account as WhatsApp sees it (`id` = `<number>@c.us`).
+     * Needed to tell "my status" apart from "contacts' status" when the gateway does not set a
+     * `mine` flag on status rows.
+     */
+    suspend fun sessionMe(id: String): ApiResult<JsonElement> = http.call("GET", "/sessions/$id/me")
+
     suspend fun deleteSession(id: String): ApiResult<ApiOutcome> = http.execute("DELETE", "/sessions/$id")
 
     suspend fun startSession(id: String): ApiResult<SessionDto> = http.call("POST", "/sessions/$id/start")

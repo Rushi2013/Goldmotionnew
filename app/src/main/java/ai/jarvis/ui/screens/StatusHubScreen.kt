@@ -114,20 +114,34 @@ fun StatusHubScreen(container: AppContainer, nav: NavHostController) {
                 loading = false
                 return@launch
             }
+            // Who am I? Used only to split "my status" from "contacts' status" when the gateway
+            // does not set a `mine` flag on the rows. Asked once per refresh, never stored.
+            val myJid: String? = when (val me = container.api.sessionMe(settings.sessionId)) {
+                is ApiResult.Success -> {
+                    val el = me.data
+                    val obj = (el as? kotlinx.serialization.json.JsonObject)
+                    val direct = (obj?.get("id") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    val nested = ((obj?.get("data") as? kotlinx.serialization.json.JsonObject)
+                        ?.get("id") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    (direct ?: nested)
+                }
+                is ApiResult.Failure -> null
+            }
+            val myDigits = myJid?.substringBefore('@')?.filter { it.isDigit() }.orEmpty()
+
             when (val res = container.api.statusList(settings.sessionId)) {
                 is ApiResult.Success -> {
                     val all = res.data.statuses
-                    // Own statuses are the ones the gateway flags as mine, or whose author JID
-                    // matches our own session number when the flag is missing.
-                    val own = all.filter { it.isOwn }
-                    val rest = all.filterNot { it.isOwn }
-                    if (own.isEmpty() && rest.isNotEmpty()) {
-                        mine = emptyList()
-                        theirs = rest
-                    } else {
-                        mine = own
-                        theirs = rest
+                    val myOwn = { s: StatusDto ->
+                        s.isOwn || (myDigits.isNotBlank() && (
+                            s.contactId?.substringBefore('@')?.filter { it.isDigit() } == myDigits ||
+                                s.contactNumber?.filter { it.isDigit() } == myDigits
+                            ))
                     }
+                    val own = all.filter { myOwn(it) }
+                    val rest = all.filterNot { myOwn(it) }
+                    mine = own
+                    theirs = rest
                 }
                 is ApiResult.Failure -> error = "${res.error.headline}: ${res.error.oneLine}"
             }
