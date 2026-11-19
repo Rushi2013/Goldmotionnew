@@ -139,29 +139,6 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    /**
-     * Infinite scroll upwards: reaching the top row pulls exactly one more page.
-     * Guarded by [loadingOlder]/[reachedStart] inside loadOlder() so a fast fling cannot
-     * fire ten requests at once.
-     */
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
-            firstVisible <= 1 && info.totalItemsCount > 0
-        }.distinctUntilChanged().collect { atTop ->
-            if (atTop) loadOlder()
-        }
-    }
-
-    /**
-     * Pull the next older page. WhatsApp history lives on the gateway, not on this device, so
-     * "previous data" is streamed page by page and never written to storage.
-     */
-    /**
-     * Pull exactly ONE older page. Triggered by scrolling to the top, never eagerly: the user
-     * asked for "old messages aane chahiye jab niche scroll karu, ek baar me sab nahi".
-     */
     fun loadOlder() {
         if (loadingOlder || reachedStart || messages.isEmpty()) return
         scope.launch {
@@ -199,6 +176,22 @@ fun ThreadScreen(container: AppContainer, chatId: String, nav: NavHostController
         }
     }
 
+    /**
+     * Infinite scroll upwards: reaching the top row pulls exactly one more page.
+     * Guarded by [loadingOlder]/[reachedStart] inside loadOlder() so a fast fling cannot
+     * fire ten requests at once.
+     */
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val firstVisible = info.visibleItemsInfo.firstOrNull()?.index ?: 0
+            firstVisible <= 1 && info.totalItemsCount > 0
+        }.distinctUntilChanged().collect { atTop ->
+            if (atTop) loadOlder()
+        }
+    }
+
+    /** Compose + send the current draft. */
     fun send() {
         val text = draft.trim()
         if (text.isEmpty() || sending) return
