@@ -215,10 +215,9 @@ class IntentParser(private val gateway: AiGateway? = null) {
         if (hasAuto && hasStatus) {
             return IntentResult(IntentName.AUTOREPLY_STATUS, confidence = 0.9, requiresConfirmation = false, risk = ai.jarvis.core.RiskLevel.LOW, language = lang, source = "rules")
         }
-        if (!hasAuto && !(lower.contains("sabko") && (hasOn || hasOff))) {
-            // "sabko auto reply do" is covered above; only auto-reply phrases reach here
-            if (!lower.contains("sab band")) return null
-        }
+        // Hard gate: without an explicit auto-reply keyword this function must never match.
+        // (Earlier this also fired on "sabko ... do", which hijacked bulk utterances.)
+        if (!hasAuto && !lower.contains("sab band")) return null
 
         val target = contactTarget(original)
         return when {
@@ -321,8 +320,8 @@ class IntentParser(private val gateway: AiGateway? = null) {
 
         // "Pramila ko hi bhej" | "send hi to Pramila" | "Pramila ko WhatsApp par hello bhej"
         val patterns = listOf(
-            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\s]{2,30})"""),
-            Regex("""(?i)([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)"""),
+            Regex("""(?i)(?:send|text|message)\s+["']?(.+?)["']?\s+to\s+([\p{L}\s]{2,30}?)(?:\s+on\s+whats\s*app|\s+whats\s*app(?:\s*(?:par|pe))?)?\s*[?.!]*\s*$"""),
+            Regex("""(?i)(?:(?:whats\s*app)\s*(?:par|pe|se|me)?\s*)?([\p{L}\s]{2,30}?)\s*(?:ko|ke liye)\s*(?:whatsapp\s*(?:par|pe|se)?)?\s*["']?(.+?)["']?\s*(?:bhej|send|likh|bhej\s*do)"""),
             Regex("""(?i)["']?(.+?)["']?\s+likh\s*(?:ke|kar)?\s*([\p{L}\s]{2,30}?)\s*ko\s*bhej"""),
         )
         for (p in patterns) {
@@ -333,10 +332,16 @@ class IntentParser(private val gateway: AiGateway? = null) {
                 else -> m.groupValues[2].trim() to m.groupValues[1].trim()
             }
             msg = msg.trim().trim('"', '\'', ',', '.')
-            name = cleanName(name)
+            name = cleanName(stripChannelWords(name))
             if (name.isBlank()) continue
             // never treat filler words as the recipient
             if (name.lowercase() in setOf("whatsapp", "message", "msg", "hi", "hello", "ye", "wo")) continue
+            // Collective audiences belong to the bulk flow, not to a single send.
+            if (name.lowercase().trim() in setOf(
+                    "sab", "sabko", "sab log", "sabhi", "sabhi ko", "everyone", "all", "all contacts",
+                    "sab logon ko", "sab logo ko",
+                )
+            ) continue
             val looksLikeMessage = msg.isBlank() || msg.lowercase() in setOf("message", "msg", "text")
             return IntentResult(
                 IntentName.SEND_WHATSAPP_MESSAGE,
@@ -371,6 +376,12 @@ class IntentParser(private val gateway: AiGateway? = null) {
         }
         return null
     }
+
+    /** Removes channel words that precede/inside the addressee phrase. */
+    private fun stripChannelWords(raw: String): String = raw
+        .replace(Regex("""(?i)^\s*whatsapp\s*(?:par|pe|se|me)?\s*"""), "")
+        .replace(Regex("""(?i)\s*whatsapp\s*(?:par|pe|se|me)?\s*$"""), "")
+        .trim()
 
     private fun cleanName(raw: String): String {
         var name = raw.trim()

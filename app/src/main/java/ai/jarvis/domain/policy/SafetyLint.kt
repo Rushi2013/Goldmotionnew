@@ -56,10 +56,10 @@ object SafetyLint {
         if (draft.count { it == '\uD83D' || it.code in 0x1F300..0x1FAFF } > 4) reasons += "Bahut zyada emoji"
         if (draft.count { it.isUpperCase() } > draft.length / 2 && draft.length > 20) reasons += "ALL CAPS"
 
-        // OTP digits and any digit sequences in auto replies are forbidden (never echo codes/amounts)
-        if (category != ReplyCategory.GREETING) {
-            if (otpPatterns.any { it.containsMatchIn(draft) }) reasons += "OTP/digits pattern mila"
-        }
+        // OTP wording AND any 4+ digit run is forbidden in EVERY category — a greeting must never
+        // echo a code either ("Your code is 482913" is exactly the message we must not mirror).
+        if (otpPatterns.any { it.containsMatchIn(draft) }) reasons += "OTP/digits pattern mila"
+        if (Regex("""\d{4,}""").containsMatchIn(draft)) reasons += "4+ digit sequence mila"
         if (moneyPatterns.any { it.containsMatchIn(draft) }) reasons += "Paise/amount ka zikr"
         if (promisePatterns.any { it.containsMatchIn(draft) }) reasons += "Promise/commitment ka zikr"
         if (category != ReplyCategory.SCHEDULING && dateTimePatterns.any { it.containsMatchIn(draft) }) {

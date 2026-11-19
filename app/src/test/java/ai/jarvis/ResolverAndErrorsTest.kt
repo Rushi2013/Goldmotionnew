@@ -32,12 +32,12 @@ class ResolverAndErrorsTest {
         val pool = listOf(
             Candidate("919812345678@c.us", "Pramila Sapkal", "919812345678", "openwa"),
             Candidate("919876543210@c.us", "Pramila Deshmukh", "919876543210", "openwa"),
-            Candidate("919900001111@c.us", "Rahul Sharma", "919900001111", "openwa"),
+            Candidate("919900011111@c.us", "Rahul Sharma", "919900011111", "openwa"),
         )
 
         val exactNumber = resolver.resolve("+91 99000 11111", pool)
         assertNotNull(exactNumber.autoSelected)
-        assertEquals("919900001111@c.us", exactNumber.autoSelected!!.chatId)
+        assertEquals("919900011111@c.us", exactNumber.autoSelected!!.chatId)
 
         // Two Pramilas → disambiguation, never a silent pick
         val ambiguous = resolver.resolve("Pramila", pool)

@@ -84,10 +84,15 @@ class ReplyRateLimiter(
         cooldownSeconds: Int = 60,
     ): Verdict {
         val now = nowProvider()
-        val last = lastReplyAt[chatId] ?: 0L
-        if (now - last < cooldownSeconds * 1000L) {
-            val wait = ((cooldownSeconds * 1000L - (now - last)) / 1000) + 1
-            return Verdict(false, "Cooldown: ${wait}s baaki")
+        // NOTE: `null` means "never replied" — using 0L as the sentinel made a reply recorded at
+        // epoch 0 look like an active cooldown (and broke the first check in tests).
+        val last = lastReplyAt[chatId]
+        if (last != null) {
+            val elapsed = now - last
+            if (elapsed < cooldownSeconds * 1000L) {
+                val wait = ((cooldownSeconds * 1000L - elapsed) / 1000) + 1
+                return Verdict(false, "Cooldown: ${wait}s baaki")
+            }
         }
         if (autoSentToday >= perChatPerDay) return Verdict(false, "Per-chat daily cap ($perChatPerDay) ho gaya")
         if (autoSentThisHour >= perHourTotal) return Verdict(false, "Hourly cap ($perHourTotal) ho gaya")

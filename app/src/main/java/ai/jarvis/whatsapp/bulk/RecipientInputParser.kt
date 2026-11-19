@@ -40,12 +40,12 @@ object RecipientInputParser {
             .flatMap { if (it.contains(';') && !it.contains(',')) it.split(';') else listOf(it) }
             .map { it.trim() }
             .filter { it.isNotBlank() && !it.startsWith("#") }
+        // Keep every row so build() can count duplicates truthfully; unique keys per line.
         val entries = LinkedHashMap<String, ParsedRecipient>()
-        for (line in lines) {
+        for ((idx, line) in lines.withIndex()) {
             val (number, name) = splitLoose(line)
             val r = toRecipient(number, name, defaultCountryCode)
-            // keep the first occurrence of a chatId; duplicates are counted in build()
-            entries.putIfAbsent(r.chatId.ifBlank { "invalid:${r.raw}" }, r)
+            entries["$idx:${r.chatId}"] = r
         }
         return build(entries, defaultCountryCode)
     }
@@ -78,8 +78,8 @@ object RecipientInputParser {
                 row.getOrNull(i)?.takeIf { it.isNotBlank() }?.let { h to it.trim() }
             }.toMap()
             val parsed = toRecipient(rawNumber, name, defaultCountryCode).copy(vars = vars)
-            val key = parsed.chatId
-            if (!entries.containsKey(key)) entries[key] = parsed
+            // keep every row (indexed key) so duplicates are counted instead of vanishing
+            entries["$r:${parsed.chatId}"] = parsed
         }
         return build(entries.mapValues { it.value }, defaultCountryCode, hadHeader = headerIsNumber)
     }

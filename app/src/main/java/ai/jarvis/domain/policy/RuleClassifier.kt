@@ -99,22 +99,22 @@ object RuleClassifier {
             "शादी", "wedding", "promotion", "result aaya", "topper", "passed", "selected",
             "naya ghar", "baby boy", "baby girl", "anniversary", "happy birthday", "janamdin",
         )),
-        // 15. OK / ack
-        Rule(ReplyCategory.OK_ACK, listOf(
-            "ok", "okay", "okk", "hmm", "thik hai", "theek hai", "ठीक है", "noted", "noted👍",
-            "got it", "samajh gaya", "accha", "अच्छा", "haan", "हाँ", "yes", "ji", "ji haan", "sahi hai",
-        )),
-        // 16. Small talk
-        Rule(ReplyCategory.SMALL_TALK, listOf(
-            "kaise ho", "kaisa hai", "कैसे हो", "kya haal", "क्या हाल", "how are you", "how's it going",
-            "what's up", "wassup", "sup", "kya chal raha", "sab badhiya", "majama", "khana khaya",
-            "weather", "mausam", "मौसम", "boring", "kya kar rahe",
-        )),
-        // 17. Greeting (lowest sensitivity of the auto group)
+        // 15. Greeting (before OK_ACK: "namaste ji" is a greeting)
         Rule(ReplyCategory.GREETING, listOf(
             "hi", "hello", "hey", "hii", "hiii", "namaste", "नमस्ते", "namaskar", "नमस्कार",
             "good morning", "गुड मॉर्निंग", "gm", "good afternoon", "good evening", "salaam",
             "assalam", "sat sri akal", "जय श्री कृष्ण", "ram ram", "राम राम", "pranam", "प्रणाम",
+        )),
+        // 16. OK / ack — after greeting on purpose: "namaste ji" must classify as a greeting.
+        Rule(ReplyCategory.OK_ACK, listOf(
+            "ok", "okay", "okk", "hmm", "thik hai", "theek hai", "ठीक है", "noted", "noted👍",
+            "got it", "samajh gaya", "accha", "अच्छा", "haan", "हाँ", "yes", "ji haan", "sahi hai",
+        )),
+        // 17. Small talk
+        Rule(ReplyCategory.SMALL_TALK, listOf(
+            "kaise ho", "kaisa hai", "कैसे हो", "kya haal", "क्या हाल", "how are you", "how's it going",
+            "what's up", "wassup", "sup", "kya chal raha", "sab badhiya", "majama", "khana khaya",
+            "weather", "mausam", "मौसम", "boring", "kya kar rahe",
         )),
     )
 
@@ -197,9 +197,14 @@ object RuleClassifier {
         )
     }
 
+    /**
+     * Lowercase + strip punctuation, but KEEP Devanagari intact.
+     * `\p{L}` already covers Devanagari letters, yet combining vowel signs (matras) are
+     * `\p{M}` (Mn/Mc), so they must be kept explicitly — otherwise "नमस्ते" would be torn apart.
+     */
     fun normalize(s: String): String = s
         .lowercase()
-        .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+        .replace(Regex("""[^\p{L}\p{N}\p{M}\s]"""), " ")
         .replace(Regex("""\s+"""), " ")
         .trim()
 
