@@ -25,6 +25,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import kotlin.random.Random
+import kotlinx.serialization.serializer
 
 data class BulkContent(
     val type: String = "TEXT",             // TEXT | IMAGE | VIDEO | AUDIO | DOCUMENT | STICKER | LOCATION | CONTACT | POLL | TEMPLATE
@@ -129,8 +130,8 @@ class BulkExecutor(
                     name = it.name,
                     varJson = if (it.vars.isEmpty()) null else json.encodeToString(
                         kotlinx.serialization.builtins.MapSerializer(
-                            kotlinx.serialization.builtins.serializer<String>(),
-                            kotlinx.serialization.builtins.serializer<String>(),
+                            kotlinx.serialization.serializer<String>(),
+                            kotlinx.serialization.serializer<String>(),
                         ),
                         it.vars,
                     ),
@@ -375,8 +376,8 @@ class BulkExecutor(
             r.varJson?.let {
                 json.decodeFromString(
                     kotlinx.serialization.builtins.MapSerializer(
-                        kotlinx.serialization.builtins.serializer<String>(),
-                        kotlinx.serialization.builtins.serializer<String>(),
+                        kotlinx.serialization.serializer<String>(),
+                        kotlinx.serialization.serializer<String>(),
                     ), it,
                 )
             } ?: emptyMap()

@@ -1,5 +1,7 @@
 package ai.jarvis.di
 
+import kotlinx.coroutines.launch
+
 import android.content.Context
 import ai.jarvis.ai.AiGateway
 import ai.jarvis.ai.MessageClassifier

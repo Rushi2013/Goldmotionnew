@@ -31,6 +31,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.serializer
 
 /** An inbound message normalised from Socket.IO / webhook / history polling. */
 data class InboundEvent(
@@ -385,7 +386,7 @@ class AutoReplyEngine(
             inboundMessageId = event.messageId,
             inboundText = if (classification.category == ReplyCategory.OTP_SECURITY) "[OTP content hidden]" else event.text,
             category = classification.category.name,
-            suggestedJson = json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer()), suggestions.distinct()),
+            suggestedJson = json.encodeToString(kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.serializer<String>()), suggestions.distinct()),
             reason = reason,
         )
         val id = db.escalationDao().insert(entity)

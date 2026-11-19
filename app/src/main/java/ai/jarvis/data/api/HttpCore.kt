@@ -125,36 +125,46 @@ class HttpCore(
      * Call `method path` and decode the JSON body into T with kotlinx.serialization.
      * `204`/empty bodies yield `null` as T? — callers use `ApiResult<Unit>` semantics via [executeUnit].
      */
-    suspend fun <reified T> call(
+    suspend inline fun <reified T> call(
         method: String,
         path: String,
         body: String? = null,
         query: Map<String, String?> = emptyMap(),
         idempotencyKey: String? = null,
         extraHeaders: Map<String, String> = emptyMap(),
-    ): ApiResult<T> {
-        val result = executeRaw(newRequest(method, path, body, query, idempotencyKey, extraHeaders))
-        return when (result) {
-            is ApiResult.Failure -> result
-            is ApiResult.Success -> {
-                val outcome = result.data
-                try {
-                    val decoded: T = if (outcome.body.isBlank() && T::class == Unit::class) {
-                        @Suppress("UNCHECKED_CAST")
-                        Unit as T
-                    } else {
-                        json.decodeFromString(outcome.body)
-                    }
-                    ApiResult.Success(decoded, outcome.httpStatus)
-                } catch (e: Exception) {
-                    ApiResult.Failure(
-                        ApiError(
-                            status = outcome.httpStatus,
-                            message = "Unexpected response shape: ${e.message?.take(200)}",
-                            rawBody = outcome.body.take(2000),
-                        )
-                    )
+    ): ApiResult<T> = decode(callRaw(method, path, body, query, idempotencyKey, extraHeaders))
+
+    @PublishedApi
+    internal suspend fun callRaw(
+        method: String,
+        path: String,
+        body: String? = null,
+        query: Map<String, String?> = emptyMap(),
+        idempotencyKey: String? = null,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): ApiResult<ApiOutcome> = executeRaw(newRequest(method, path, body, query, idempotencyKey, extraHeaders))
+
+    @PublishedApi
+    internal inline fun <reified T> decode(result: ApiResult<ApiOutcome>): ApiResult<T> = when (result) {
+        is ApiResult.Failure -> result
+        is ApiResult.Success -> {
+            val outcome = result.data
+            try {
+                val decoded: T = if (outcome.body.isBlank() && T::class == Unit::class) {
+                    @Suppress("UNCHECKED_CAST")
+                    Unit as T
+                } else {
+                    json.decodeFromString<T>(outcome.body)
                 }
+                ApiResult.Success(decoded, outcome.httpStatus)
+            } catch (e: Exception) {
+                ApiResult.Failure(
+                    ApiError(
+                        status = outcome.httpStatus,
+                        message = "Unexpected response shape: ${e.message?.take(200)}",
+                        rawBody = outcome.body.take(2000),
+                    )
+                )
             }
         }
     }
@@ -221,10 +231,10 @@ class HttpCore(
         else -> "HTTP $status"
     }
 
-    private suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
+    internal suspend fun Call.await(): Response = suspendCancellableCoroutine { cont ->
         enqueue(object : Callback {
             override fun onResponse(call: Call, response: Response) {
-                cont.resume(response) { _, _, _ -> response.close() }
+                cont.resume(response) { response.close() }
             }
 
             override fun onFailure(call: Call, e: IOException) {
