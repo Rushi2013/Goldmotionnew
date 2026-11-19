@@ -41,7 +41,21 @@ jobs:
       - name: Run unit tests
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:testDebugUnitTest --stacktrace
+          set +e
+          ./gradlew :app:testDebugUnitTest --stacktrace > test.log 2>&1
+          CODE=$?
+          echo "exit=$CODE"
+          {
+            echo "### Unit tests exit=$CODE"
+            echo '```'
+            grep -E "^e: |FAILED|AssertionError|expected:|Exception|error:" test.log | head -80
+            echo '```'
+            echo "### failure detail"
+            echo '```'
+            grep -A4 -E "^.*FAILED$|AssertionError" test.log | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$CODE"
 
       - name: Upload test reports
         if: always()
